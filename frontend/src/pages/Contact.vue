@@ -133,6 +133,7 @@
           <component :is="tab.icon" v-if="tab.icon" class="h-5" />
           {{ __(tab.label) }}
           <Badge
+            v-if="tab.count != null"
             class="group-hover:bg-surface-gray-7"
             :class="[selected ? 'bg-surface-gray-7' : 'bg-gray-600']"
             variant="solid"
@@ -143,15 +144,25 @@
           </Badge>
         </button>
       </template>
-      <template #tab-panel="{ tab }">
-        <DealsListView
-          v-if="tab.label === 'Deals' && rows.length"
-          class="mt-4"
-          :rows="rows"
-          :columns="columns"
-          :options="{ selectable: false, showTooltip: false }"
+      <template #tab-panel>
+        <template v-if="tabs[tabIndex]?.name === 'Deals'">
+          <DealsListView
+            v-if="rows.length"
+            class="mt-4"
+            :rows="rows"
+            :columns="columns"
+            :options="{ selectable: false, showTooltip: false }"
+          />
+          <EmptyState v-else :icon="tabs[tabIndex]?.icon" name="Deals" />
+        </template>
+        <Activities
+          v-else
+          doctype="Contact"
+          :docname="contactId"
+          :tabs="tabs"
+          v-model:tabIndex="tabIndex"
+          v-model:reload="reload"
         />
-        <EmptyState v-if="!rows.length" :icon="tab.icon" name="Deals" />
       </template>
     </Tabs>
   </div>
@@ -179,6 +190,14 @@ import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import CameraIcon from '@/components/Icons/CameraIcon.vue'
 import DealsIcon from '@/components/Icons/DealsIcon.vue'
 import DealsListView from '@/components/ListViews/DealsListView.vue'
+import Activities from '@/components/Activities/Activities.vue'
+import ActivityIcon from '@/components/Icons/ActivityIcon.vue'
+import EmailIcon from '@/components/Icons/EmailIcon.vue'
+import CommentIcon from '@/components/Icons/CommentIcon.vue'
+import NoteIcon from '@/components/Icons/NoteIcon.vue'
+import TaskIcon from '@/components/Icons/TaskIcon.vue'
+import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
+import { useActiveTabManager } from '@/composables/useActiveTabManager'
 import CustomActions from '@/components/CustomActions.vue'
 import {
   formatDate,
@@ -288,14 +307,46 @@ function changeContactImage(file) {
   })
 }
 
-const tabIndex = ref(0)
-const tabs = [
+const reload = ref(false)
+const tabs = computed(() => [
   {
-    label: 'Deals',
+    name: 'Deals',
+    label: __('Deals'),
     icon: DealsIcon,
     count: computed(() => deals.data?.length),
   },
-]
+  {
+    name: 'Activity',
+    label: __('Activity'),
+    icon: ActivityIcon,
+  },
+  {
+    name: 'Emails',
+    label: __('Emails'),
+    icon: EmailIcon,
+  },
+  {
+    name: 'Comments',
+    label: __('Comments'),
+    icon: CommentIcon,
+  },
+  {
+    name: 'Notes',
+    label: __('Notes'),
+    icon: NoteIcon,
+  },
+  {
+    name: 'Tasks',
+    label: __('Tasks'),
+    icon: TaskIcon,
+  },
+  {
+    name: 'Attachments',
+    label: __('Attachments'),
+    icon: AttachmentIcon,
+  },
+])
+const { tabIndex } = useActiveTabManager(tabs, 'lastContactTab')
 
 const deals = createResource({
   url: 'crm.api.contact.get_linked_deals',

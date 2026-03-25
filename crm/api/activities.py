@@ -11,8 +11,12 @@ from crm.fcrm.doctype.crm_call_log.crm_call_log import parse_call_log
 
 
 @frappe.whitelist()
-def get_activities(name: str):
-	if frappe.db.exists("CRM Deal", name):
+def get_activities(name: str, doctype: str = None):
+	if doctype == "Contact":
+		return get_contact_activities(name)
+	elif doctype == "CRM Organization":
+		return get_organization_activities(name)
+	elif frappe.db.exists("CRM Deal", name):
 		return get_deal_activities(name)
 	elif frappe.db.exists("CRM Lead", name):
 		return get_lead_activities(name)
@@ -315,6 +319,228 @@ def get_lead_activities(name: str):
 	return activities, calls, notes, tasks, attachments
 
 
+def get_contact_activities(name: str):
+	if not frappe.has_permission("Contact", "read", name):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	get_docinfo("", "Contact", name)
+	docinfo = frappe.response["docinfo"]
+	contact_meta = frappe.get_meta("Contact")
+	contact_fields = {
+		field.fieldname: {"label": field.label, "options": field.options}
+		for field in contact_meta.fields
+	}
+
+	doc = frappe.db.get_values("Contact", name, ["creation", "owner"])[0]
+	activities = [
+		{
+			"activity_type": "creation",
+			"creation": doc[0],
+			"owner": doc[1],
+			"data": _("created this contact"),
+			"is_lead": False,
+		}
+	]
+
+	docinfo.versions.reverse()
+	for version in docinfo.versions:
+		data = json.loads(version.data)
+		if not data.get("changed"):
+			continue
+		if change := data.get("changed")[0]:
+			field = contact_fields.get(change[0], None)
+			if not field or (not change[1] and not change[2]):
+				continue
+			field_label = field.get("label") or change[0]
+			field_option = field.get("options") or None
+			activity_type = "changed"
+			data = {"field": change[0], "field_label": field_label, "old_value": change[1], "value": change[2]}
+			if not change[1] and change[2]:
+				activity_type = "added"
+				data = {"field": change[0], "field_label": field_label, "value": change[2]}
+			elif change[1] and not change[2]:
+				activity_type = "removed"
+				data = {"field": change[0], "field_label": field_label, "value": change[1]}
+			if data.get("value") and field_option and is_translatable(field_option):
+				data["value"] = _(data["value"])
+				if data.get("old_value"):
+					data["old_value"] = _(data["old_value"])
+		activity = {
+			"activity_type": activity_type,
+			"creation": version.creation,
+			"owner": version.owner,
+			"data": data,
+			"is_lead": False,
+			"options": field_option,
+		}
+		activities.append(activity)
+
+	for comment in docinfo.comments:
+		activity = {
+			"name": comment.name,
+			"activity_type": "comment",
+			"creation": comment.creation,
+			"owner": comment.owner,
+			"content": comment.content,
+			"attachments": get_attachments("Comment", comment.name),
+			"is_lead": False,
+		}
+		activities.append(activity)
+
+	for communication in docinfo.communications + docinfo.automated_messages:
+		activity = {
+			"activity_type": "communication",
+			"communication_type": communication.communication_type,
+			"communication_date": communication.communication_date or communication.creation,
+			"creation": communication.creation,
+			"data": {
+				"subject": communication.subject,
+				"content": communication.content,
+				"sender_full_name": communication.sender_full_name,
+				"sender": communication.sender,
+				"recipients": communication.recipients,
+				"cc": communication.cc,
+				"bcc": communication.bcc,
+				"attachments": get_attachments("Communication", communication.name),
+				"read_by_recipient": communication.read_by_recipient,
+				"delivery_status": communication.delivery_status,
+			},
+			"is_lead": False,
+		}
+		activities.append(activity)
+
+	for attachment_log in docinfo.attachment_logs:
+		activity = {
+			"name": attachment_log.name,
+			"activity_type": "attachment_log",
+			"creation": attachment_log.creation,
+			"owner": attachment_log.owner,
+			"data": parse_attachment_log(attachment_log.content, attachment_log.comment_type),
+			"is_lead": False,
+		}
+		activities.append(activity)
+
+	notes = get_linked_notes(name, "Contact")
+	tasks = get_linked_tasks(name, "Contact")
+	attachments = get_attachments("Contact", name)
+
+	activities.sort(key=lambda x: x["creation"], reverse=True)
+	activities = handle_multiple_versions(activities)
+
+	return activities, [], notes, tasks, attachments
+
+
+def get_organization_activities(name: str):
+	if not frappe.has_permission("CRM Organization", "read", name):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	get_docinfo("", "CRM Organization", name)
+	docinfo = frappe.response["docinfo"]
+	org_meta = frappe.get_meta("CRM Organization")
+	org_fields = {
+		field.fieldname: {"label": field.label, "options": field.options}
+		for field in org_meta.fields
+	}
+
+	doc = frappe.db.get_values("CRM Organization", name, ["creation", "owner"])[0]
+	activities = [
+		{
+			"activity_type": "creation",
+			"creation": doc[0],
+			"owner": doc[1],
+			"data": _("created this organization"),
+			"is_lead": False,
+		}
+	]
+
+	docinfo.versions.reverse()
+	for version in docinfo.versions:
+		data = json.loads(version.data)
+		if not data.get("changed"):
+			continue
+		if change := data.get("changed")[0]:
+			field = org_fields.get(change[0], None)
+			if not field or (not change[1] and not change[2]):
+				continue
+			field_label = field.get("label") or change[0]
+			field_option = field.get("options") or None
+			activity_type = "changed"
+			data = {"field": change[0], "field_label": field_label, "old_value": change[1], "value": change[2]}
+			if not change[1] and change[2]:
+				activity_type = "added"
+				data = {"field": change[0], "field_label": field_label, "value": change[2]}
+			elif change[1] and not change[2]:
+				activity_type = "removed"
+				data = {"field": change[0], "field_label": field_label, "value": change[1]}
+			if data.get("value") and field_option and is_translatable(field_option):
+				data["value"] = _(data["value"])
+				if data.get("old_value"):
+					data["old_value"] = _(data["old_value"])
+		activity = {
+			"activity_type": activity_type,
+			"creation": version.creation,
+			"owner": version.owner,
+			"data": data,
+			"is_lead": False,
+			"options": field_option,
+		}
+		activities.append(activity)
+
+	for comment in docinfo.comments:
+		activity = {
+			"name": comment.name,
+			"activity_type": "comment",
+			"creation": comment.creation,
+			"owner": comment.owner,
+			"content": comment.content,
+			"attachments": get_attachments("Comment", comment.name),
+			"is_lead": False,
+		}
+		activities.append(activity)
+
+	for communication in docinfo.communications + docinfo.automated_messages:
+		activity = {
+			"activity_type": "communication",
+			"communication_type": communication.communication_type,
+			"communication_date": communication.communication_date or communication.creation,
+			"creation": communication.creation,
+			"data": {
+				"subject": communication.subject,
+				"content": communication.content,
+				"sender_full_name": communication.sender_full_name,
+				"sender": communication.sender,
+				"recipients": communication.recipients,
+				"cc": communication.cc,
+				"bcc": communication.bcc,
+				"attachments": get_attachments("Communication", communication.name),
+				"read_by_recipient": communication.read_by_recipient,
+				"delivery_status": communication.delivery_status,
+			},
+			"is_lead": False,
+		}
+		activities.append(activity)
+
+	for attachment_log in docinfo.attachment_logs:
+		activity = {
+			"name": attachment_log.name,
+			"activity_type": "attachment_log",
+			"creation": attachment_log.creation,
+			"owner": attachment_log.owner,
+			"data": parse_attachment_log(attachment_log.content, attachment_log.comment_type),
+			"is_lead": False,
+		}
+		activities.append(activity)
+
+	notes = get_linked_notes(name, "CRM Organization")
+	tasks = get_linked_tasks(name, "CRM Organization")
+	attachments = get_attachments("CRM Organization", name)
+
+	activities.sort(key=lambda x: x["creation"], reverse=True)
+	activities = handle_multiple_versions(activities)
+
+	return activities, [], notes, tasks, attachments
+
+
 def get_attachments(doctype: str, name: str):
 	return (
 		frappe.db.get_all(
@@ -467,19 +693,25 @@ def get_linked_calls(name: str):
 	return {"calls": calls, "notes": notes, "tasks": tasks}
 
 
-def get_linked_notes(name: str):
+def get_linked_notes(name: str, reference_doctype: str = None):
+	filters = {"reference_docname": name}
+	if reference_doctype:
+		filters["reference_doctype"] = reference_doctype
 	notes = frappe.db.get_all(
 		"FCRM Note",
-		filters={"reference_docname": name},
+		filters=filters,
 		fields=["name", "title", "content", "owner", "modified", "creation"],
 	)
 	return notes or []
 
 
-def get_linked_tasks(name: str):
+def get_linked_tasks(name: str, reference_doctype: str = None):
+	filters = {"reference_docname": name}
+	if reference_doctype:
+		filters["reference_doctype"] = reference_doctype
 	tasks = frappe.db.get_all(
 		"CRM Task",
-		filters={"reference_docname": name},
+		filters=filters,
 		fields=[
 			"name",
 			"title",

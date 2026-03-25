@@ -237,11 +237,6 @@ const links = [
     to: 'Organizations',
   },
   {
-    label: 'Notes',
-    icon: NoteIcon,
-    to: 'Notes',
-  },
-  {
     label: 'Tasks',
     icon: TaskIcon,
     to: 'Tasks',
@@ -316,8 +311,6 @@ function getIcon(routeName, icon) {
       return ContactsIcon
     case 'Organizations':
       return OrganizationsIcon
-    case 'Notes':
-      return NoteIcon
     case 'Call Logs':
       return PhoneIcon
     default:
