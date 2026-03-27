@@ -1,0 +1,208 @@
+{
+ "actions": [],
+ "autoname": "PR-.#####",
+ "creation": "2026-03-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "partner",
+  "reporting_month",
+  "submitted_by",
+  "section_partner",
+  "achievements",
+  "partner_satisfaction",
+  "partner_satisfaction_details",
+  "insights_issues",
+  "next_steps_with_partner",
+  "section_groups",
+  "group_satisfaction",
+  "group_satisfaction_details",
+  "num_of_groups_on_insights",
+  "num_of_registered_groups",
+  "group_number_difference_reason",
+  "percentage_of_two_plus_not_backed_up_groups",
+  "percentage_of_never_backed_up_groups",
+  "reasons_for_groups_not_backing_up",
+  "support_plan_for_backups",
+  "section_general",
+  "insights_data_concerns"
+ ],
+ "fields": [
+  {
+   "fieldname": "partner",
+   "fieldtype": "Link",
+   "label": "Partner",
+   "options": "CRM Organization",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reporting_month",
+   "fieldtype": "Date",
+   "label": "Reporting Month",
+   "reqd": 1
+  },
+  {
+   "fieldname": "submitted_by",
+   "fieldtype": "Link",
+   "label": "Submitted By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_partner",
+   "fieldtype": "Section Break",
+   "label": "Partner Information"
+  },
+  {
+   "fieldname": "achievements",
+   "fieldtype": "Long Text",
+   "label": "Key Achievements",
+   "reqd": 1,
+   "description": "Key Achievements with the partner's pilot/project(s) this month"
+  },
+  {
+   "fieldname": "partner_satisfaction",
+   "fieldtype": "Select",
+   "label": "How satisfied is this Partner Organization with DreamSave?",
+   "options": "\nThis is a new partnership\nDisappointed, but we are working on improvements\nSatisfied, no complaints but no praise either\nHappy, often praising DreamSave/DSL\nThe Partner is recommending DreamSave/DSL to friends and colleagues\nLimited engagement and prioritization of DreamSave",
+   "reqd": 1
+  },
+  {
+   "fieldname": "partner_satisfaction_details",
+   "fieldtype": "Long Text",
+   "label": "Partner Satisfaction Details",
+   "reqd": 1,
+   "description": "Please explain with more details"
+  },
+  {
+   "fieldname": "insights_issues",
+   "fieldtype": "Long Text",
+   "label": "Insights Issues",
+   "reqd": 1,
+   "description": "Are there any major complaints or issues experienced by the partner with Insights?"
+  },
+  {
+   "fieldname": "next_steps_with_partner",
+   "fieldtype": "Long Text",
+   "label": "Next Steps and Upcoming Plans with this Partner",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_groups",
+   "fieldtype": "Section Break",
+   "label": "Groups"
+  },
+  {
+   "fieldname": "group_satisfaction",
+   "fieldtype": "Select",
+   "label": "How satisfied are the groups with DreamSave?",
+   "options": "\nGroups have not started using DreamSave yet\nDisappointed, but we are working on improvements\nSatisfied, no complaints but no praise either\nHappy, often praising DreamSave/DSL\nMembers are recommending DreamSave to friends and colleagues",
+   "reqd": 1
+  },
+  {
+   "fieldname": "group_satisfaction_details",
+   "fieldtype": "Long Text",
+   "label": "Group Satisfaction Details",
+   "reqd": 1,
+   "description": "Please explain with more details"
+  },
+  {
+   "fieldname": "num_of_groups_on_insights",
+   "fieldtype": "Int",
+   "label": "Number of Groups on Insights",
+   "reqd": 1,
+   "non_negative": 1
+  },
+  {
+   "fieldname": "num_of_registered_groups",
+   "fieldtype": "Int",
+   "label": "Number of Registered Groups (Partner Reported)",
+   "reqd": 1,
+   "non_negative": 1
+  },
+  {
+   "fieldname": "group_number_difference_reason",
+   "fieldtype": "Long Text",
+   "label": "Reason for Difference in Group Numbers",
+   "description": "If the number of groups on Insights is different from what the partner has reported, please describe the reason and steps to resolve"
+  },
+  {
+   "fieldname": "percentage_of_two_plus_not_backed_up_groups",
+   "fieldtype": "Float",
+   "label": "% Groups with 2+ Meetings Not Backed Up",
+   "reqd": 1
+  },
+  {
+   "fieldname": "percentage_of_never_backed_up_groups",
+   "fieldtype": "Float",
+   "label": "% Groups that Have Never Backed Up Meetings",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reasons_for_groups_not_backing_up",
+   "fieldtype": "Long Text",
+   "label": "Reasons for Groups Not Backing Up Meetings"
+  },
+  {
+   "fieldname": "support_plan_for_backups",
+   "fieldtype": "Long Text",
+   "label": "Support Plan for Backup Issues",
+   "description": "What did you do this month to support groups not backing up? What plans have you made?"
+  },
+  {
+   "fieldname": "section_general",
+   "fieldtype": "Section Break",
+   "label": "General"
+  },
+  {
+   "fieldname": "insights_data_concerns",
+   "fieldtype": "Long Text",
+   "label": "Insights Data Concerns",
+   "reqd": 1,
+   "description": "What data concerns do you have and what steps have you taken to troubleshoot or fix the data issues?"
+  }
+ ],
+ "links": [],
+ "modified": "2026-03-27 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "CRM Partner Report",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

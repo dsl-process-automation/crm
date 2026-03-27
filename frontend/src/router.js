@@ -121,6 +121,17 @@ const routes = [
     name: 'Not Permitted',
     component: () => import('@/pages/NotPermitted.vue'),
   },
+  {
+    path: '/partner-reports',
+    name: 'PartnerReports',
+    component: () => import('@/pages/PartnerReports.vue'),
+  },
+  {
+    path: '/partner-reports/:reportId',
+    name: 'PartnerReport',
+    component: () => import('@/pages/PartnerReport.vue'),
+    props: true,
+  },
 ]
 
 const handleMobileView = (componentName) => {

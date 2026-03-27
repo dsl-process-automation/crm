@@ -17,7 +17,8 @@
   "website",
   "territory",
   "industry",
-  "address"
+  "address",
+  "contract_status"
  ],
  "fields": [
   {
@@ -81,6 +82,12 @@
    "fieldname": "exchange_rate",
    "fieldtype": "Float",
    "label": "Exchange Rate"
+  },
+  {
+   "fieldname": "contract_status",
+   "fieldtype": "Select",
+   "label": "Contract Status",
+   "options": "Active\nExpired\nProspect\nTerminated"
   }
  ],
  "image_field": "organization_logo",

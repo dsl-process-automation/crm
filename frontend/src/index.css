@@ -8,6 +8,17 @@
 }
 
 @layer components {
+  .form-input,
+  .form-select,
+  .form-textarea {
+    @apply w-full rounded-md border border-outline-gray-2 bg-surface-white px-3 py-2 text-sm text-ink-gray-9 placeholder-ink-gray-3 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500;
+  }
+  .form-input.border-red-400,
+  .form-select.border-red-400,
+  .form-textarea.border-red-400 {
+    @apply border-red-400 focus:border-red-400 focus:ring-red-400;
+  }
+
   .prose-f {
     @apply break-all
 			max-w-none
