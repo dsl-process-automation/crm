@@ -1,10 +1,10 @@
 @import 'frappe-ui/style.css';
 
-/* DSL Theme: dark mode variables + teal gradient background */
-html[data-dsl-theme='true'],
-html[data-dsl-theme='true'] body {
-  background: linear-gradient(180deg, #0d2326 0%, #1f4042 20%) !important;
-  min-height: 100vh;
+/* DSL Theme: override frappe-ui surface tokens to teal gradient stops.
+   --surface-menu-bar controls sidebar bg; --surface-white controls main content bg. */
+[data-dsl-theme='true'] {
+  --surface-menu-bar: #0d2326;
+  --surface-white: #1f4042;
 }
 
 @layer components {
