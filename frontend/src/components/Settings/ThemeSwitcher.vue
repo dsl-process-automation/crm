@@ -171,11 +171,61 @@
         ></div>
       </div>
     </div>
+    <div
+      class="flex-1 rounded-lg border cursor-pointer"
+      :class="
+        theme == 'dsl'
+          ? 'border-outline-gray-5'
+          : 'border-outline-gray-modals'
+      "
+      @click="theme = 'dsl'"
+    >
+      <div class="pl-5 pt-3.5 rounded-t-[10.5px]" style="background: linear-gradient(180deg, #0D2326 0%, #1F4042 100%)">
+        <div class="bg-gray-900 rounded-tl-sm">
+          <div class="flex gap-[3px] py-[3px] px-1 border-b border-gray-800">
+            <div class="size-1.5 bg-[#FF5F57] rounded-full"></div>
+            <div class="size-1.5 bg-[#FEBC2D] rounded-full"></div>
+            <div class="size-1.5 bg-[#28C840] rounded-full"></div>
+          </div>
+          <div class="flex items-start justify-between gap-2 p-2.5 pr-0 pb-1">
+            <div
+              class="flex items-center flex-1 gap-1 text-xs text-ink-gray-5 font-semibold"
+            >
+              <img
+                v-if="typeof logo == 'string'"
+                :src="logo"
+                class="size-5 object-cover"
+              />
+              <component :is="logo" v-else class="size-5 shrink-0 rounded" />
+              <div>{{ __(name) }}</div>
+            </div>
+            <div class="flex flex-col flex-1 gap-[5px]">
+              <div class="bg-gray-800 w-full h-1.5"></div>
+              <div class="bg-gray-800 w-full h-1.5"></div>
+              <div class="bg-gray-800 w-full h-1.5"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-between px-3 py-2 border-t">
+        <div class="text-base text-ink-gray-7">
+          {{ __('DSL') }}
+        </div>
+        <div
+          class="rounded-full size-3.5"
+          :class="
+            theme == 'dsl'
+              ? 'border-4 border-outline-gray-5'
+              : 'border border-outline-gray-4'
+          "
+        />
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { useTheme } from 'frappe-ui'
+import { useDSLTheme } from '@/composables/useDSLTheme'
 import { computed } from 'vue'
 
 defineProps({
@@ -183,16 +233,14 @@ defineProps({
   name: { type: String, default: '' },
 })
 
-const { currentTheme, setTheme } = useTheme()
+const { currentDSLTheme, applyDSLTheme } = useDSLTheme()
 
 const theme = computed({
   get() {
-    if (currentTheme.value === 'light') return 'light'
-    if (currentTheme.value === 'dark') return 'dark'
-    return 'system'
+    return currentDSLTheme.value
   },
   set(value) {
-    setTheme(value)
+    applyDSLTheme(value)
   },
 })
 </script>

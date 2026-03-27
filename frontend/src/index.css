@@ -1,5 +1,12 @@
 @import 'frappe-ui/style.css';
 
+/* DSL Theme: dark mode variables + teal gradient background */
+html[data-dsl-theme='true'],
+html[data-dsl-theme='true'] body {
+  background: linear-gradient(180deg, #0d2326 0%, #1f4042 20%) !important;
+  min-height: 100vh;
+}
+
 @layer components {
   .prose-f {
     @apply break-all
