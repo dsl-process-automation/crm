@@ -16,7 +16,13 @@
   .form-input.border-red-400,
   .form-select.border-red-400,
   .form-textarea.border-red-400 {
-    @apply border-red-400 focus:border-red-400 focus:ring-red-400;
+    border-color: #f87171;
+  }
+  .form-input.border-red-400:focus,
+  .form-select.border-red-400:focus,
+  .form-textarea.border-red-400:focus {
+    border-color: #f87171;
+    --tw-ring-color: #f87171;
   }
 
   .prose-f {
