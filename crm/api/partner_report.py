@@ -3,7 +3,7 @@ from frappe import _
 
 
 @frappe.whitelist()
-def get_partner_reports(page=1, page_length=20, filters=None):
+def get_partner_reports(page: int = 1, page_length: int = 20, filters: list | None = None):
 	"""Return paginated list of CRM Partner Reports."""
 	page = int(page)
 	page_length = int(page_length)
@@ -37,7 +37,7 @@ def get_partner_reports(page=1, page_length=20, filters=None):
 
 
 @frappe.whitelist()
-def get_partner_report(name):
+def get_partner_report(name: str):
 	"""Return a single CRM Partner Report."""
 	report = frappe.get_doc("CRM Partner Report", name)
 	report.check_permission("read")
@@ -45,7 +45,7 @@ def get_partner_report(name):
 
 
 @frappe.whitelist()
-def create_partner_report(data):
+def create_partner_report(data: dict | str):
 	"""Create a new CRM Partner Report."""
 	if isinstance(data, str):
 		import json
@@ -58,7 +58,7 @@ def create_partner_report(data):
 
 
 @frappe.whitelist()
-def update_partner_report(name, data):
+def update_partner_report(name: str, data: dict | str):
 	"""Update an existing CRM Partner Report."""
 	if isinstance(data, str):
 		import json
@@ -73,9 +73,9 @@ def update_partner_report(name, data):
 
 
 @frappe.whitelist()
-def get_partners_for_user():
-	"""Return Organizations with contract_status Active or Expired, filtered
-	to the current user's territories if they manage any."""
+def get_partners_for_user() -> list[dict]:
+	"""Return Organizations with contract_status Active, Expired, or unset,
+	filtered to the current user's territories if they manage any."""
 	user = frappe.session.user
 
 	# Find territories managed by this user
@@ -85,8 +85,9 @@ def get_partners_for_user():
 		pluck="name",
 	)
 
+	# Include orgs whose contract_status is Active, Expired, or not yet set
 	base_filters = [
-		["contract_status", "in", ["Active", "Expired"]],
+		["contract_status", "not in", ["Prospect", "Terminated"]],
 	]
 
 	if managed_territories:

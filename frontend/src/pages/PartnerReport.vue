@@ -85,8 +85,7 @@
                   :key="org.name"
                   :value="org.name"
                 >
-                  {{ org.organization_name }}
-                  <template v-if="org.territory"> ({{ org.territory }})</template>
+                  {{ org.organization_name }}{{ org.territory ? ` (${org.territory})` : '' }}
                 </option>
               </select>
               <p v-if="errors.partner" class="mt-1 text-xs text-red-500">
