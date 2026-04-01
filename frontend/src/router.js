@@ -122,8 +122,9 @@ const routes = [
     component: () => import('@/pages/NotPermitted.vue'),
   },
   {
-    path: '/partner-reports',
-    name: 'PartnerReports',
+    alias: '/partner-reports',
+    path: '/partner-reports/view/:viewType?',
+    name: 'Partner Reports',
     component: () => import('@/pages/PartnerReports.vue'),
   },
   {

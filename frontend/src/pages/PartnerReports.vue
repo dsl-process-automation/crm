@@ -1,133 +1,180 @@
 <template>
-  <div class="flex h-full flex-col">
-    <!-- Header -->
-    <div class="flex items-center justify-between border-b px-5 py-3">
-      <h1 class="text-xl font-semibold text-ink-gray-9">
-        {{ __('Partner Reports') }}
-      </h1>
+  <LayoutHeader>
+    <template #left-header>
+      <ViewBreadcrumbs v-model="viewControls" routeName="Partner Reports" />
+    </template>
+    <template #right-header>
+      <CustomActions
+        v-if="partnerReportsListView?.customListActions"
+        :actions="partnerReportsListView.customListActions"
+      />
       <Button
+        v-if="permissions.data?.permissions?.create"
         variant="solid"
         :label="__('New Report')"
-        icon-left="plus"
+        iconLeft="plus"
         @click="createNew"
       />
-    </div>
-
-    <!-- Loading -->
-    <div v-if="reports.loading" class="flex flex-1 items-center justify-center">
-      <LoadingIndicator class="h-6 w-6 text-ink-gray-4" />
-    </div>
-
-    <!-- Empty state -->
-    <div
-      v-else-if="!rows.length"
-      class="flex flex-1 flex-col items-center justify-center gap-3 text-ink-gray-5"
-    >
-      <PartnerReportIcon class="h-12 w-12 opacity-30" />
-      <p class="text-base">{{ __('No partner reports yet') }}</p>
-      <Button variant="subtle" :label="__('Create First Report')" @click="createNew" />
-    </div>
-
-    <!-- Table -->
-    <div v-else class="flex-1 overflow-auto">
-      <table class="w-full text-sm">
-        <thead class="sticky top-0 bg-surface-gray-1 text-ink-gray-5">
-          <tr>
-            <th class="px-4 py-2.5 text-left font-medium">{{ __('Partner') }}</th>
-            <th class="px-4 py-2.5 text-left font-medium">{{ __('Reporting Month') }}</th>
-            <th class="px-4 py-2.5 text-left font-medium">{{ __('Partner Satisfaction') }}</th>
-            <th class="px-4 py-2.5 text-left font-medium">{{ __('Group Satisfaction') }}</th>
-            <th class="px-4 py-2.5 text-left font-medium">{{ __('Submitted By') }}</th>
-            <th class="px-4 py-2.5 text-left font-medium">{{ __('Created') }}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-outline-gray-1">
-          <tr
-            v-for="row in rows"
-            :key="row.name"
-            class="cursor-pointer hover:bg-surface-gray-1 transition-colors"
-            @click="openReport(row.name)"
-          >
-            <td class="px-4 py-3 font-medium text-ink-gray-9">{{ row.partner }}</td>
-            <td class="px-4 py-3 text-ink-gray-7">{{ formatMonth(row.reporting_month) }}</td>
-            <td class="px-4 py-3">
-              <SatisfactionBadge :value="row.partner_satisfaction" />
-            </td>
-            <td class="px-4 py-3">
-              <SatisfactionBadge :value="row.group_satisfaction" />
-            </td>
-            <td class="px-4 py-3 text-ink-gray-6">{{ row.submitted_by }}</td>
-            <td class="px-4 py-3 text-ink-gray-5">{{ formatDate(row.creation) }}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <!-- Load more -->
-      <div v-if="hasMore" class="flex justify-center py-4">
-        <Button
-          variant="ghost"
-          :label="__('Load more')"
-          :loading="reports.loading"
-          @click="loadMore"
-        />
-      </div>
-    </div>
-
-    <PartnerReportModal v-if="showPartnerReportModal" v-model="showPartnerReportModal" @submitted="handleSubmitted" />
-  </div>
+    </template>
+  </LayoutHeader>
+  <ViewControls
+    ref="viewControls"
+    v-model="partnerReports"
+    v-model:loadMore="loadMore"
+    v-model:resizeColumn="triggerResize"
+    v-model:updatedPageCount="updatedPageCount"
+    doctype="CRM Partner Report"
+    :options="{
+      defaultViewName: __('Partner Reports View'),
+      allowedViews: ['list', 'group_by'],
+    }"
+  />
+  <PartnerReportsListView
+    v-if="partnerReports.data && rows.length"
+    ref="partnerReportsListView"
+    v-model="partnerReports.data.page_length_count"
+    v-model:list="partnerReports"
+    :rows="rows"
+    :columns="columns"
+    :options="{
+      showTooltip: false,
+      resizeColumn: true,
+      rowCount: partnerReports.data.row_count,
+      totalCount: partnerReports.data.total_count,
+      canDelete: permissions.data?.permissions?.delete,
+    }"
+    @loadMore="() => loadMore++"
+    @columnWidthUpdated="() => triggerResize++"
+    @updatePageCount="(count) => (updatedPageCount = count)"
+    @showReport="showReport"
+    @applyFilter="(data) => viewControls.applyFilter(data)"
+    @selectionsChanged="(selections) => viewControls.updateSelections(selections)"
+  />
+  <EmptyState
+    v-else-if="partnerReports.data && !rows.length"
+    name="Partner Reports"
+    :icon="PartnerReportIcon"
+    :description="__('It appears that there are currently no Partner Reports available. You can create a Partner Report using the New Report button.')"
+  />
+  <PartnerReportModal
+    v-if="showPartnerReportModal"
+    v-model="showPartnerReportModal"
+    :report-id="selectedReportId"
+    @submitted="handleSubmitted"
+    @saved="handleSaved"
+  />
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { createResource, Button, LoadingIndicator } from 'frappe-ui'
+import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
+import CustomActions from '@/components/CustomActions.vue'
+import LayoutHeader from '@/components/LayoutHeader.vue'
 import PartnerReportIcon from '@/components/Icons/PartnerReportIcon.vue'
-import SatisfactionBadge from '@/components/PartnerReports/SatisfactionBadge.vue'
 import PartnerReportModal from '@/components/Modals/PartnerReportModal.vue'
+import PartnerReportsListView from '@/components/ListViews/PartnerReportsListView.vue'
+import ViewControls from '@/components/ViewControls.vue'
+import EmptyState from '@/components/ListViews/EmptyState.vue'
+import { usersStore } from '@/stores/users'
+import { formatDate, timeAgo } from '@/utils'
+import { Button, createResource } from 'frappe-ui'
+import { computed, ref } from 'vue'
 
-const router = useRouter()
+const { getUser } = usersStore()
 
-const page = ref(1)
-const PAGE_LENGTH = 25
+const partnerReports = ref({})
+const loadMore = ref(1)
+const triggerResize = ref(1)
+const updatedPageCount = ref(20)
+const viewControls = ref(null)
+const partnerReportsListView = ref(null)
 const showPartnerReportModal = ref(false)
+const selectedReportId = ref('new')
 
-const reports = createResource({
-  url: 'crm.api.partner_report.get_partner_reports',
-  params: { page: page.value, page_length: PAGE_LENGTH },
+const permissions = createResource({
+  url: 'crm.api.partner_report.get_partner_report_permissions',
   auto: true,
+  initialData: { permissions: {} },
 })
 
-const rows = computed(() => reports.data?.reports || [])
-const total = computed(() => reports.data?.total || 0)
-const hasMore = computed(() => rows.value.length < total.value)
+const rows = computed(() => {
+  if (
+    !partnerReports.value?.data?.data ||
+    !['list', 'group_by'].includes(partnerReports.value.data.view_type)
+  ) {
+    return []
+  }
 
-function loadMore() {
-  page.value++
-  reports.update({ params: { page: page.value, page_length: PAGE_LENGTH } })
-  reports.reload()
-}
+  return partnerReports.value.data.data.map((report) => {
+    let mappedRow = {}
+
+    partnerReports.value.data.rows.forEach((fieldname) => {
+      mappedRow[fieldname] = report[fieldname]
+
+      if (fieldname === 'reporting_month' && report[fieldname]) {
+        mappedRow[fieldname] = {
+          label: formatReportingMonth(report[fieldname]),
+          value: report[fieldname],
+        }
+      } else if (fieldname === 'submitted_by' && report[fieldname]) {
+        const user = getUser(report[fieldname])
+        mappedRow[fieldname] = {
+          label: user?.full_name || report[fieldname],
+          ...(user || {}),
+        }
+      } else if (['creation', 'modified'].includes(fieldname) && report[fieldname]) {
+        mappedRow[fieldname] = {
+          label: formatDate(report[fieldname]),
+          timeAgo: __(timeAgo(report[fieldname])),
+        }
+      }
+    })
+
+    return mappedRow
+  })
+})
+
+const columns = computed(() => {
+  let listColumns = partnerReports.value?.data?.columns || []
+
+  if (listColumns.length) {
+    listColumns = listColumns.map((column, index) => {
+      if (index === listColumns.length - 1) {
+        return { ...column, align: 'right' }
+      }
+      return column
+    })
+  }
+
+  return listColumns
+})
 
 function createNew() {
+  selectedReportId.value = 'new'
   showPartnerReportModal.value = true
 }
 
-function openReport(name) {
-  router.push({ name: 'PartnerReport', params: { reportId: name } })
+function showReport(name) {
+  selectedReportId.value = name
+  showPartnerReportModal.value = true
 }
 
 function handleSubmitted(name) {
-  reports.reload()
-  router.push({ name: 'PartnerReport', params: { reportId: name } })
+  partnerReports.value?.reload?.()
+  selectedReportId.value = name
+  setTimeout(() => {
+    showPartnerReportModal.value = true
+  })
 }
 
-function formatMonth(dateStr) {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+function handleSaved() {
+  partnerReports.value?.reload?.()
 }
 
-function formatDate(dateStr) {
-  if (!dateStr) return ''
-  return new Date(dateStr).toLocaleDateString()
+function formatReportingMonth(dateString) {
+  const date = new Date(dateString)
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+  })
 }
 </script>

@@ -255,7 +255,7 @@ const links = [
   {
     label: 'Partner Reports',
     icon: PartnerReportIcon,
-    to: 'PartnerReports',
+    to: 'Partner Reports',
   },
 ]
 

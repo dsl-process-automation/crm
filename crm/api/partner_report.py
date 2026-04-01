@@ -45,6 +45,18 @@ def get_partner_report(name: str):
 
 
 @frappe.whitelist()
+def get_partner_report_permissions(name: str | None = None):
+	"""Return current user's doctype or document permissions for Partner Reports."""
+	permissions = {
+		"create": bool(frappe.has_permission("CRM Partner Report", "create")),
+		"read": bool(frappe.has_permission("CRM Partner Report", "read", doc=name)),
+		"write": bool(frappe.has_permission("CRM Partner Report", "write", doc=name)),
+		"delete": bool(frappe.has_permission("CRM Partner Report", "delete", doc=name)),
+	}
+	return {"permissions": permissions}
+
+
+@frappe.whitelist()
 def create_partner_report(data: dict | str):
 	"""Create a new CRM Partner Report."""
 	if isinstance(data, str):

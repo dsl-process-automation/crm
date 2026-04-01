@@ -1,16 +1,16 @@
 <template>
-  <div class="flex h-full flex-col">
+  <div class="flex h-full min-h-0 flex-col">
     <!-- Header -->
     <div v-if="!inDialog" class="flex items-center gap-3 border-b px-5 py-3">
-      <Button variant="ghost" icon="arrow-left" @click="router.push({ name: 'PartnerReports' })" />
+      <Button variant="ghost" icon="arrow-left" @click="router.push({ name: 'Partner Reports' })" />
       <h1 class="text-xl font-semibold text-ink-gray-9">
-        {{ isNew ? __('New Partner Report') : __('Partner Report') }}
+        {{ isNew ? __('New Partner Report') : showForm ? __('Edit Partner Report') : __('Partner Report') }}
       </h1>
       <Badge v-if="!isNew" :label="reportId" variant="subtle" />
     </div>
 
     <!-- Step indicator -->
-    <div class="flex items-center gap-0 border-b bg-surface-gray-1 px-6 py-3">
+    <div v-if="showForm" class="flex items-center gap-0 border-b bg-surface-gray-1 px-6 py-3">
       <template v-for="(step, idx) in steps" :key="step.key">
         <div
           class="flex items-center gap-2 cursor-pointer"
@@ -45,17 +45,17 @@
     </div>
 
     <!-- Loading existing report -->
-    <div v-if="loading" class="flex flex-1 items-center justify-center">
+    <div v-if="loading" class="flex min-h-0 flex-1 items-center justify-center">
       <LoadingIndicator class="h-6 w-6 text-ink-gray-4" />
     </div>
 
-    <div v-else class="flex flex-1 flex-col overflow-hidden">
+    <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden">
       <!-- Step content -->
-      <div class="flex-1 overflow-y-auto px-6 py-6">
+      <div v-if="showForm" class="min-h-0 flex-1 overflow-y-auto px-6 py-6">
 
         <!-- ── STEP 1: Partner ── -->
-        <div v-if="currentStep === 0" class="mx-auto max-w-2xl space-y-6">
-          <div class="grid grid-cols-2 gap-4">
+        <div v-if="currentStep === 0" class="mx-auto w-full max-w-5xl space-y-6">
+          <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div>
               <label class="mb-1 block text-sm font-medium text-ink-gray-7">
                 {{ __('Reporting Month') }} <span class="text-red-500">*</span>
@@ -74,20 +74,19 @@
               <label class="mb-1 block text-sm font-medium text-ink-gray-7">
                 {{ __('Partner') }} <span class="text-red-500">*</span>
               </label>
-              <select
-                v-model="form.partner"
-                class="form-select w-full"
-                :class="{ 'border-red-400': errors.partner }"
+              <div
+                class="rounded-md"
+                :class="errors.partner ? 'ring-1 ring-red-400' : ''"
               >
-                <option value="">{{ __('Select partner…') }}</option>
-                <option
-                  v-for="org in partners"
-                  :key="org.name"
-                  :value="org.name"
-                >
-                  {{ org.organization_name }}{{ org.territory ? ` (${org.territory})` : '' }}
-                </option>
-              </select>
+                <Autocomplete
+                  v-model="form.partner"
+                  :options="partnerOptions"
+                  :placeholder="__('Select partner…')"
+                  variant="outline"
+                  size="lg"
+                  :disabled="lockPartner"
+                />
+              </div>
               <p v-if="errors.partner" class="mt-1 text-xs text-red-500">
                 {{ errors.partner }}
               </p>
@@ -101,12 +100,13 @@
             <p class="mb-1 text-xs text-ink-gray-5">
               {{ __('Key achievements with the partner\'s pilot/project(s) this month — e.g. groups trained, staff who installed the app, etc.') }}
             </p>
-            <textarea
-              v-model="form.achievements"
-              rows="4"
-              class="form-textarea w-full"
-              :class="{ 'border-red-400': errors.achievements }"
+            <TextEditor
+              variant="outline"
+              :editor-class="getEditorClass('achievements')"
+              :bubbleMenu="true"
+              :content="form.achievements"
               :placeholder="__('Indicate key achievements this month…')"
+              @change="(val) => (form.achievements = val)"
             />
             <p v-if="errors.achievements" class="mt-1 text-xs text-red-500">
               {{ errors.achievements }}
@@ -122,13 +122,18 @@
               <label
                 v-for="opt in partnerSatisfactionOptions"
                 :key="opt"
-                class="flex cursor-pointer items-center gap-2 rounded p-2 hover:bg-surface-gray-1"
+                class="flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors"
+                :class="
+                  form.partner_satisfaction === opt
+                    ? 'border-ink-gray-9 bg-surface-gray-2'
+                    : 'border-outline-gray-2 bg-surface-white hover:bg-surface-gray-1'
+                "
               >
                 <input
                   v-model="form.partner_satisfaction"
                   type="radio"
                   :value="opt"
-                  class="form-checkbox"
+                  class="mt-0.5 h-4 w-4 shrink-0 border-outline-gray-3 text-ink-gray-9 focus:ring-2 focus:ring-outline-gray-3"
                 />
                 <span class="text-sm text-ink-gray-8">{{ opt }}</span>
               </label>
@@ -145,11 +150,12 @@
             <p class="mb-1 text-xs text-ink-gray-5">
               {{ __('E.g. are they excited about new areas? Did a glitch make them nervous? What would make us lose a partner?') }}
             </p>
-            <textarea
-              v-model="form.partner_satisfaction_details"
-              rows="4"
-              class="form-textarea w-full"
-              :class="{ 'border-red-400': errors.partner_satisfaction_details }"
+            <TextEditor
+              variant="outline"
+              :editor-class="getEditorClass('partner_satisfaction_details')"
+              :bubbleMenu="true"
+              :content="form.partner_satisfaction_details"
+              @change="(val) => (form.partner_satisfaction_details = val)"
             />
             <p v-if="errors.partner_satisfaction_details" class="mt-1 text-xs text-red-500">
               {{ errors.partner_satisfaction_details }}
@@ -163,11 +169,12 @@
             <p class="mb-1 text-xs text-ink-gray-5">
               {{ __('Any major complaints or issues experienced by the partner with Insights?') }}
             </p>
-            <textarea
-              v-model="form.insights_issues"
-              rows="4"
-              class="form-textarea w-full"
-              :class="{ 'border-red-400': errors.insights_issues }"
+            <TextEditor
+              variant="outline"
+              :editor-class="getEditorClass('insights_issues')"
+              :bubbleMenu="true"
+              :content="form.insights_issues"
+              @change="(val) => (form.insights_issues = val)"
             />
             <p v-if="errors.insights_issues" class="mt-1 text-xs text-red-500">
               {{ errors.insights_issues }}
@@ -178,11 +185,12 @@
             <label class="mb-1 block text-sm font-medium text-ink-gray-7">
               {{ __('Next Steps and Upcoming Plans with this Partner') }} <span class="text-red-500">*</span>
             </label>
-            <textarea
-              v-model="form.next_steps_with_partner"
-              rows="4"
-              class="form-textarea w-full"
-              :class="{ 'border-red-400': errors.next_steps_with_partner }"
+            <TextEditor
+              variant="outline"
+              :editor-class="getEditorClass('next_steps_with_partner')"
+              :bubbleMenu="true"
+              :content="form.next_steps_with_partner"
+              @change="(val) => (form.next_steps_with_partner = val)"
             />
             <p v-if="errors.next_steps_with_partner" class="mt-1 text-xs text-red-500">
               {{ errors.next_steps_with_partner }}
@@ -191,7 +199,7 @@
         </div>
 
         <!-- ── STEP 2: Groups ── -->
-        <div v-if="currentStep === 1" class="mx-auto max-w-2xl space-y-6">
+        <div v-if="currentStep === 1" class="mx-auto w-full max-w-5xl space-y-6">
           <div>
             <label class="mb-2 block text-sm font-medium text-ink-gray-7">
               {{ __('How satisfied are the groups with DreamSave?') }}
@@ -201,13 +209,18 @@
               <label
                 v-for="opt in groupSatisfactionOptions"
                 :key="opt"
-                class="flex cursor-pointer items-center gap-2 rounded p-2 hover:bg-surface-gray-1"
+                class="flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors"
+                :class="
+                  form.group_satisfaction === opt
+                    ? 'border-ink-gray-9 bg-surface-gray-2'
+                    : 'border-outline-gray-2 bg-surface-white hover:bg-surface-gray-1'
+                "
               >
                 <input
                   v-model="form.group_satisfaction"
                   type="radio"
                   :value="opt"
-                  class="form-checkbox"
+                  class="mt-0.5 h-4 w-4 shrink-0 border-outline-gray-3 text-ink-gray-9 focus:ring-2 focus:ring-outline-gray-3"
                 />
                 <span class="text-sm text-ink-gray-8">{{ opt }}</span>
               </label>
@@ -224,18 +237,19 @@
             <p class="mb-1 text-xs text-ink-gray-5">
               {{ __('E.g. what are the groups loving about the app? What problems are they having?') }}
             </p>
-            <textarea
-              v-model="form.group_satisfaction_details"
-              rows="4"
-              class="form-textarea w-full"
-              :class="{ 'border-red-400': errors.group_satisfaction_details }"
+            <TextEditor
+              variant="outline"
+              :editor-class="getEditorClass('group_satisfaction_details')"
+              :bubbleMenu="true"
+              :content="form.group_satisfaction_details"
+              @change="(val) => (form.group_satisfaction_details = val)"
             />
             <p v-if="errors.group_satisfaction_details" class="mt-1 text-xs text-red-500">
               {{ errors.group_satisfaction_details }}
             </p>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div>
               <label class="mb-1 block text-sm font-medium text-ink-gray-7">
                 {{ __('Number of Groups on Insights') }} <span class="text-red-500">*</span>
@@ -276,18 +290,19 @@
             <p class="mb-1 text-xs text-ink-gray-5">
               {{ __('The numbers on Insights and what the partner reported differ. Please explain and describe steps to resolve.') }}
             </p>
-            <textarea
-              v-model="form.group_number_difference_reason"
-              rows="4"
-              class="form-textarea w-full"
-              :class="{ 'border-red-400': errors.group_number_difference_reason }"
+            <TextEditor
+              variant="outline"
+              :editor-class="getEditorClass('group_number_difference_reason')"
+              :bubbleMenu="true"
+              :content="form.group_number_difference_reason"
+              @change="(val) => (form.group_number_difference_reason = val)"
             />
             <p v-if="errors.group_number_difference_reason" class="mt-1 text-xs text-red-500">
               {{ errors.group_number_difference_reason }}
             </p>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div>
               <label class="mb-1 block text-sm font-medium text-ink-gray-7">
                 {{ __('% Groups with 2+ Meetings Not Backed Up') }} <span class="text-red-500">*</span>
@@ -332,11 +347,12 @@
               <label class="mb-1 block text-sm font-medium text-ink-gray-7">
                 {{ __('Reasons for Groups Not Backing Up Meetings') }} <span class="text-red-500">*</span>
               </label>
-              <textarea
-                v-model="form.reasons_for_groups_not_backing_up"
-                rows="4"
-                class="form-textarea w-full"
-                :class="{ 'border-red-400': errors.reasons_for_groups_not_backing_up }"
+              <TextEditor
+                variant="outline"
+                :editor-class="getEditorClass('reasons_for_groups_not_backing_up')"
+                :bubbleMenu="true"
+                :content="form.reasons_for_groups_not_backing_up"
+                @change="(val) => (form.reasons_for_groups_not_backing_up = val)"
               />
               <p v-if="errors.reasons_for_groups_not_backing_up" class="mt-1 text-xs text-red-500">
                 {{ errors.reasons_for_groups_not_backing_up }}
@@ -349,11 +365,12 @@
               <p class="mb-1 text-xs text-ink-gray-5">
                 {{ __('What did you do this month to support groups not backing up? If nothing, what plans have you made?') }}
               </p>
-              <textarea
-                v-model="form.support_plan_for_backups"
-                rows="4"
-                class="form-textarea w-full"
-                :class="{ 'border-red-400': errors.support_plan_for_backups }"
+              <TextEditor
+                variant="outline"
+                :editor-class="getEditorClass('support_plan_for_backups')"
+                :bubbleMenu="true"
+                :content="form.support_plan_for_backups"
+                @change="(val) => (form.support_plan_for_backups = val)"
               />
               <p v-if="errors.support_plan_for_backups" class="mt-1 text-xs text-red-500">
                 {{ errors.support_plan_for_backups }}
@@ -363,7 +380,7 @@
         </div>
 
         <!-- ── STEP 3: General ── -->
-        <div v-if="currentStep === 2" class="mx-auto max-w-2xl space-y-6">
+        <div v-if="currentStep === 2" class="mx-auto w-full max-w-5xl space-y-6">
           <div>
             <label class="mb-1 block text-sm font-medium text-ink-gray-7">
               {{ __('Insights Data Concerns') }} <span class="text-red-500">*</span>
@@ -371,12 +388,13 @@
             <p class="mb-1 text-xs text-ink-gray-5">
               {{ __('What data concerns do you have and what steps have you taken to troubleshoot or fix the data issues?') }}
             </p>
-            <textarea
-              v-model="form.insights_data_concerns"
-              rows="6"
-              class="form-textarea w-full"
-              :class="{ 'border-red-400': errors.insights_data_concerns }"
+            <TextEditor
+              variant="outline"
+              :editor-class="getEditorClass('insights_data_concerns')"
+              :bubbleMenu="true"
+              :content="form.insights_data_concerns"
               :placeholder="__('Describe any data concerns and your troubleshooting steps…')"
+              @change="(val) => (form.insights_data_concerns = val)"
             />
             <p v-if="errors.insights_data_concerns" class="mt-1 text-xs text-red-500">
               {{ errors.insights_data_concerns }}
@@ -408,14 +426,30 @@
         </div>
       </div>
 
+      <div v-else class="min-h-0 flex-1 overflow-y-auto bg-white">
+        <PartnerReportDocument
+          :report="form"
+          :partner-name="partnerName"
+          :partner-territory="partnerTerritory"
+          :can-edit="true"
+          @edit="startEditing"
+        />
+      </div>
+
       <!-- Navigation footer -->
-      <div class="flex items-center justify-between border-t px-6 py-4">
+      <div v-if="showForm" class="shrink-0 flex items-center justify-between border-t px-6 py-4">
         <Button
           v-if="currentStep > 0"
           variant="subtle"
           :label="__('Back')"
           icon-left="arrow-left"
           @click="currentStep--"
+        />
+        <Button
+          v-else-if="!isNew"
+          variant="subtle"
+          :label="__('Cancel')"
+          @click="cancelEditing"
         />
         <div v-else />
 
@@ -442,9 +476,18 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
+import PartnerReportDocument from '@/components/PartnerReports/PartnerReportDocument.vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { createResource, Button, Badge, LoadingIndicator, toast } from 'frappe-ui'
+import {
+  createResource,
+  Button,
+  Badge,
+  LoadingIndicator,
+  TextEditor,
+  toast,
+} from 'frappe-ui'
 
 const props = defineProps({
   reportId: {
@@ -455,17 +498,32 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  initialPartner: {
+    type: String,
+    default: '',
+  },
+  initialPartnerLabel: {
+    type: String,
+    default: '',
+  },
+  lockPartner: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['submitted', 'saved'])
 
 const router = useRouter()
 const isNew = computed(() => props.reportId === 'new')
+const isEditing = ref(isNew.value)
+const showForm = computed(() => isNew.value || isEditing.value)
 
 const currentStep = ref(0)
 const loading = ref(false)
 const saving = ref(false)
 const saveError = ref('')
+const loadedReport = ref(null)
 
 const steps = [
   { key: 'partner', label: 'Partner' },
@@ -481,7 +539,7 @@ const updateReportResource = createResource({
   url: 'crm.api.partner_report.update_partner_report',
 })
 
-const form = ref({
+const defaultForm = {
   reporting_month: '',
   partner: '',
   achievements: '',
@@ -499,7 +557,9 @@ const form = ref({
   reasons_for_groups_not_backing_up: '',
   support_plan_for_backups: '',
   insights_data_concerns: '',
-})
+}
+
+const form = ref({ ...defaultForm })
 
 const errors = ref({})
 
@@ -525,11 +585,88 @@ const partnersResource = createResource({
   url: 'crm.api.partner_report.get_partners_for_user',
   auto: true,
 })
-const partners = computed(() => partnersResource.data || [])
+
+function formatPartnerLabel(partner) {
+  return `${partner.organization_name}${partner.territory ? ` (${partner.territory})` : ''}`
+}
+
+const partners = computed(() => {
+  const items = partnersResource.data || []
+  const selectedPartner = form.value.partner || props.initialPartner
+  const selectedPartnerLabel =
+    selectedPartner === props.initialPartner
+      ? props.initialPartnerLabel || selectedPartner
+      : selectedPartner
+
+  if (
+    selectedPartner &&
+    !items.some((partner) => partner.name === selectedPartner)
+  ) {
+    return [
+      {
+        name: selectedPartner,
+        organization_name: selectedPartnerLabel,
+        territory: '',
+      },
+      ...items,
+    ]
+  }
+
+  return items
+})
+
+const partnerOptions = computed(() =>
+  partners.value.map((partner) => ({
+    label: formatPartnerLabel(partner),
+    value: partner.name,
+  })),
+)
+
 const partnerName = computed(() => {
   const found = partners.value.find((p) => p.name === form.value.partner)
-  return found ? found.organization_name : form.value.partner
+  return found ? formatPartnerLabel(found) : form.value.partner
 })
+
+const partnerTerritory = computed(() => {
+  const found = partners.value.find((p) => p.name === form.value.partner)
+  return found?.territory || ''
+})
+
+const richTextFields = new Set([
+  'achievements',
+  'partner_satisfaction_details',
+  'insights_issues',
+  'next_steps_with_partner',
+  'group_satisfaction_details',
+  'group_number_difference_reason',
+  'reasons_for_groups_not_backing_up',
+  'support_plan_for_backups',
+  'insights_data_concerns',
+])
+
+const richTextEditorBaseClass =
+  '!prose-sm w-full max-w-full overflow-auto min-h-[240px] max-h-[28rem] rounded-md border px-3 py-2 text-ink-gray-8 transition-colors border-[--surface-gray-2] bg-surface-gray-2 placeholder-ink-gray-4 hover:border-outline-gray-modals hover:bg-surface-gray-3 hover:shadow-sm focus:bg-surface-white focus:border-outline-gray-4 focus:shadow-sm focus:ring-0 focus-visible:ring-2 focus-visible:ring-outline-gray-3'
+
+function getEditorClass(field) {
+  return `${richTextEditorBaseClass} ${errors.value[field] ? 'border-red-400 focus-visible:ring-red-200' : ''}`
+}
+
+function stripRichText(value) {
+  return (value || '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isEmptyField(field, value) {
+  if (richTextFields.has(field)) {
+    return !stripRichText(value)
+  }
+
+  return value === null || value === undefined || value === ''
+}
 
 // Conditional logic
 const groupNumbersDiffer = computed(() => {
@@ -546,26 +683,74 @@ const hasBackupIssues = computed(() => {
 })
 
 // Load existing report
-onMounted(async () => {
-  if (!isNew.value) {
-    loading.value = true
-    try {
-      const resource = createResource({
-        url: 'crm.api.partner_report.get_partner_report',
-        params: { name: props.reportId },
-        auto: true,
-      })
-      await resource.promise
-      if (resource.data) {
-        Object.assign(form.value, resource.data)
-      }
-    } catch {
-      toast({ title: 'Error loading report', icon: 'x', iconClasses: 'text-red-500' })
-    } finally {
-      loading.value = false
-    }
+function normalizeReportData(report = {}) {
+  return {
+    ...defaultForm,
+    ...report,
+    reporting_month: report.reporting_month?.slice?.(0, 7) || '',
   }
-})
+}
+
+function applyFormData(report = {}) {
+  form.value = normalizeReportData(report)
+}
+
+function startEditing() {
+  isEditing.value = true
+  errors.value = {}
+  saveError.value = ''
+}
+
+function cancelEditing() {
+  if (isNew.value) return
+  applyFormData(loadedReport.value || {})
+  isEditing.value = false
+  currentStep.value = 0
+  errors.value = {}
+  saveError.value = ''
+}
+
+async function loadReport() {
+  currentStep.value = 0
+  errors.value = {}
+  saveError.value = ''
+
+  if (isNew.value) {
+    loadedReport.value = null
+    applyFormData({
+      partner: props.initialPartner || '',
+    })
+    isEditing.value = true
+    return
+  }
+
+  loading.value = true
+  try {
+    const resource = createResource({
+      url: 'crm.api.partner_report.get_partner_report',
+      params: { name: props.reportId },
+      auto: true,
+    })
+    await resource.promise
+    if (resource.data) {
+      loadedReport.value = normalizeReportData(resource.data)
+      applyFormData(resource.data)
+      isEditing.value = false
+    }
+  } catch {
+    toast({ title: 'Error loading report', icon: 'x', iconClasses: 'text-red-500' })
+  } finally {
+    loading.value = false
+  }
+}
+
+watch(
+  () => [props.reportId, props.initialPartner, props.initialPartnerLabel],
+  () => {
+    loadReport()
+  },
+  { immediate: true },
+)
 
 // Validation per step
 const stepValidations = {
@@ -594,21 +779,34 @@ function validateStep(step) {
   const fields = stepValidations[step] || []
   for (const field of fields) {
     const val = form.value[field]
-    if (val === null || val === undefined || val === '') {
+    if (isEmptyField(field, val)) {
       newErrors[field] = 'This field is required'
     }
   }
 
   // Conditional required fields for step 1
   if (step === 1) {
-    if (groupNumbersDiffer.value && !form.value.group_number_difference_reason?.trim()) {
+    if (
+      groupNumbersDiffer.value &&
+      isEmptyField(
+        'group_number_difference_reason',
+        form.value.group_number_difference_reason,
+      )
+    ) {
       newErrors.group_number_difference_reason = 'Please explain the difference in group numbers'
     }
     if (hasBackupIssues.value) {
-      if (!form.value.reasons_for_groups_not_backing_up?.trim()) {
+      if (
+        isEmptyField(
+          'reasons_for_groups_not_backing_up',
+          form.value.reasons_for_groups_not_backing_up,
+        )
+      ) {
         newErrors.reasons_for_groups_not_backing_up = 'This field is required'
       }
-      if (!form.value.support_plan_for_backups?.trim()) {
+      if (
+        isEmptyField('support_plan_for_backups', form.value.support_plan_for_backups)
+      ) {
         newErrors.support_plan_for_backups = 'This field is required'
       }
     }
@@ -672,6 +870,12 @@ async function submit() {
       }
     } else {
       await updateReportResource.submit({ name: props.reportId, data: payload })
+      loadedReport.value = {
+        ...(loadedReport.value || {}),
+        ...form.value,
+      }
+      isEditing.value = false
+      currentStep.value = 0
       toast({ title: 'Report saved', icon: 'check', iconClasses: 'text-green-500' })
       emit('saved', props.reportId)
     }

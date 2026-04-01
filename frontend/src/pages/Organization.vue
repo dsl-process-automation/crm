@@ -162,6 +162,41 @@
           />
           <EmptyState v-else :icon="tabs[tabIndex]?.icon" :name="__('Contacts')" />
         </template>
+        <template v-else-if="tabs[tabIndex]?.name === 'Partner Reports'">
+          <div class="flex justify-end px-5 pt-4">
+            <Button
+              v-if="partnerReportPermissions.data?.permissions?.create"
+              variant="solid"
+              :label="__('New Report')"
+              iconLeft="plus"
+              @click="createPartnerReport"
+            />
+          </div>
+          <PartnerReportsListView
+            v-if="organizationPartnerReportRows.length"
+            class="mt-4"
+            v-model="organizationPartnerReports.data.page_length_count"
+            v-model:list="organizationPartnerReports"
+            :rows="organizationPartnerReportRows"
+            :columns="organizationPartnerReportColumns"
+            :options="{
+              selectable: true,
+              showTooltip: false,
+              rowCount: organizationPartnerReports.data.row_count,
+              totalCount: organizationPartnerReports.data.total_count,
+              canDelete: partnerReportPermissions.data?.permissions?.delete,
+            }"
+            @loadMore="loadMoreOrganizationPartnerReports"
+            @updatePageCount="updateOrganizationPartnerReportPageCount"
+            @showReport="showPartnerReport"
+          />
+          <EmptyState
+            v-else
+            :icon="tabs[tabIndex]?.icon"
+            :name="__('Partner Reports')"
+            :description="__('It appears that there are currently no Partner Reports available. You can create a Partner Report using the New Report button.')"
+          />
+        </template>
         <Activities
           v-else
           doctype="CRM Organization"
@@ -185,6 +220,16 @@
     :docname="props.organizationId"
     name="Organizations"
   />
+  <PartnerReportModal
+    v-if="showPartnerReportModal"
+    v-model="showPartnerReportModal"
+    :report-id="selectedPartnerReportId"
+    :initial-partner="props.organizationId"
+    :initial-partner-label="organization.doc?.organization_name || props.organizationId"
+    :lock-partner="selectedPartnerReportId === 'new'"
+    @submitted="handlePartnerReportSubmitted"
+    @saved="handlePartnerReportSaved"
+  />
 </template>
 
 <script setup>
@@ -195,10 +240,12 @@ import Icon from '@/components/Icon.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import DealsListView from '@/components/ListViews/DealsListView.vue'
 import ContactsListView from '@/components/ListViews/ContactsListView.vue'
+import PartnerReportsListView from '@/components/ListViews/PartnerReportsListView.vue'
 import WebsiteIcon from '@/components/Icons/WebsiteIcon.vue'
 import CameraIcon from '@/components/Icons/CameraIcon.vue'
 import DealsIcon from '@/components/Icons/DealsIcon.vue'
 import ContactsIcon from '@/components/Icons/ContactsIcon.vue'
+import PartnerReportIcon from '@/components/Icons/PartnerReportIcon.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import ActivityIcon from '@/components/Icons/ActivityIcon.vue'
 import EmailIcon from '@/components/Icons/EmailIcon.vue'
@@ -207,6 +254,7 @@ import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
+import PartnerReportModal from '@/components/Modals/PartnerReportModal.vue'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
 import DeleteLinkedDocModal from '@/components/DeleteLinkedDocModal.vue'
 import CustomActions from '@/components/CustomActions.vue'
@@ -257,6 +305,8 @@ const errorTitle = ref('')
 const errorMessage = ref('')
 
 const showDeleteLinkedDocModal = ref(false)
+const showPartnerReportModal = ref(false)
+const selectedPartnerReportId = ref('new')
 
 const {
   document: organization,
@@ -396,6 +446,12 @@ const tabs = computed(() => [
     count: computed(() => contacts.data?.length),
   },
   {
+    name: 'Partner Reports',
+    label: __('Partner Reports'),
+    icon: PartnerReportIcon,
+    count: computed(() => organizationPartnerReports.data?.total_count || 0),
+  },
+  {
     name: 'Activity',
     label: __('Activity'),
     icon: ActivityIcon,
@@ -472,6 +528,26 @@ const contacts = createListResource({
   auto: true,
 })
 
+const partnerReportPermissions = createResource({
+  url: 'crm.api.partner_report.get_partner_report_permissions',
+  auto: true,
+  initialData: { permissions: {} },
+})
+
+const organizationPartnerReports = createResource({
+  url: 'crm.api.doc.get_data',
+  cache: ['organizationPartnerReports', props.organizationId],
+  params: {
+    doctype: 'CRM Partner Report',
+    filters: { partner: props.organizationId },
+    order_by: 'reporting_month desc, creation desc',
+    view: { view_type: 'list' },
+    page_length: 20,
+    page_length_count: 20,
+  },
+  auto: true,
+})
+
 const rows = computed(() => {
   let list = !tabIndex.value ? deals : contacts
 
@@ -486,6 +562,53 @@ const { getFormattedCurrency } = getMeta('CRM Deal')
 
 const columns = computed(() => {
   return tabIndex.value === 0 ? dealColumns : contactColumns
+})
+
+const organizationPartnerReportRows = computed(() => {
+  if (!organizationPartnerReports.data?.data) return []
+
+  return organizationPartnerReports.data.data.map((report) => {
+    let mappedRow = {}
+
+    organizationPartnerReports.data.rows.forEach((fieldname) => {
+      mappedRow[fieldname] = report[fieldname]
+
+      if (fieldname === 'reporting_month' && report[fieldname]) {
+        mappedRow[fieldname] = {
+          label: formatReportingMonth(report[fieldname]),
+          value: report[fieldname],
+        }
+      } else if (fieldname === 'submitted_by' && report[fieldname]) {
+        const user = getUser(report[fieldname])
+        mappedRow[fieldname] = {
+          label: user?.full_name || report[fieldname],
+          ...(user || {}),
+        }
+      } else if (['creation', 'modified'].includes(fieldname) && report[fieldname]) {
+        mappedRow[fieldname] = {
+          label: formatDate(report[fieldname]),
+          timeAgo: __(timeAgo(report[fieldname])),
+        }
+      }
+    })
+
+    return mappedRow
+  })
+})
+
+const organizationPartnerReportColumns = computed(() => {
+  let listColumns = organizationPartnerReports.data?.columns || []
+
+  if (listColumns.length) {
+    listColumns = listColumns.map((column, index) => {
+      if (index === listColumns.length - 1) {
+        return { ...column, align: 'right' }
+      }
+      return column
+    })
+  }
+
+  return listColumns
 })
 
 function getDealRowObject(deal) {
@@ -532,6 +655,63 @@ function getContactRowObject(contact) {
       timeAgo: __(timeAgo(contact.modified)),
     },
   }
+}
+
+function formatReportingMonth(dateString) {
+  const date = new Date(dateString)
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+  })
+}
+
+function loadMoreOrganizationPartnerReports() {
+  if (organizationPartnerReports.loading) return
+
+  organizationPartnerReports.update({
+    params: {
+      ...organizationPartnerReports.params,
+      page_length:
+        organizationPartnerReports.params.page_length +
+        organizationPartnerReports.params.page_length_count,
+    },
+  })
+  organizationPartnerReports.reload()
+}
+
+function updateOrganizationPartnerReportPageCount(count) {
+  if (organizationPartnerReports.loading) return
+
+  organizationPartnerReports.update({
+    params: {
+      ...organizationPartnerReports.params,
+      page_length: count,
+      page_length_count: count,
+    },
+  })
+  organizationPartnerReports.reload()
+}
+
+function createPartnerReport() {
+  selectedPartnerReportId.value = 'new'
+  showPartnerReportModal.value = true
+}
+
+function showPartnerReport(name) {
+  selectedPartnerReportId.value = name
+  showPartnerReportModal.value = true
+}
+
+function handlePartnerReportSubmitted(name) {
+  organizationPartnerReports.reload()
+  selectedPartnerReportId.value = name
+  setTimeout(() => {
+    showPartnerReportModal.value = true
+  })
+}
+
+function handlePartnerReportSaved() {
+  organizationPartnerReports.reload()
 }
 
 const dealColumns = [
