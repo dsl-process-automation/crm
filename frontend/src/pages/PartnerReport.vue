@@ -1,7 +1,7 @@
 <template>
   <div class="flex h-full flex-col">
     <!-- Header -->
-    <div class="flex items-center gap-3 border-b px-5 py-3">
+    <div v-if="!inDialog" class="flex items-center gap-3 border-b px-5 py-3">
       <Button variant="ghost" icon="arrow-left" @click="router.push({ name: 'PartnerReports' })" />
       <h1 class="text-xl font-semibold text-ink-gray-9">
         {{ isNew ? __('New Partner Report') : __('Partner Report') }}
@@ -125,9 +125,9 @@
                 class="flex cursor-pointer items-center gap-2 rounded p-2 hover:bg-surface-gray-1"
               >
                 <input
+                  v-model="form.partner_satisfaction"
                   type="radio"
                   :value="opt"
-                  v-model="form.partner_satisfaction"
                   class="form-checkbox"
                 />
                 <span class="text-sm text-ink-gray-8">{{ opt }}</span>
@@ -204,9 +204,9 @@
                 class="flex cursor-pointer items-center gap-2 rounded p-2 hover:bg-surface-gray-1"
               >
                 <input
+                  v-model="form.group_satisfaction"
                   type="radio"
                   :value="opt"
-                  v-model="form.group_satisfaction"
                   class="form-checkbox"
                 />
                 <span class="text-sm text-ink-gray-8">{{ opt }}</span>
@@ -451,7 +451,13 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  inDialog: {
+    type: Boolean,
+    default: false,
+  },
 })
+
+const emit = defineEmits(['submitted', 'saved'])
 
 const router = useRouter()
 const isNew = computed(() => props.reportId === 'new')
@@ -466,6 +472,14 @@ const steps = [
   { key: 'groups', label: 'Groups' },
   { key: 'general', label: 'General' },
 ]
+
+const createReportResource = createResource({
+  url: 'crm.api.partner_report.create_partner_report',
+})
+
+const updateReportResource = createResource({
+  url: 'crm.api.partner_report.update_partner_report',
+})
 
 const form = ref({
   reporting_month: '',
@@ -545,7 +559,7 @@ onMounted(async () => {
       if (resource.data) {
         Object.assign(form.value, resource.data)
       }
-    } catch (e) {
+    } catch {
       toast({ title: 'Error loading report', icon: 'x', iconClasses: 'text-red-500' })
     } finally {
       loading.value = false
@@ -625,6 +639,15 @@ function formatMonth(dateStr) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
 }
 
+function getErrorMessage(error) {
+  return (
+    error?.messages?.join?.('\n') ||
+    error?.error?.messages?.join?.('\n') ||
+    error?.message ||
+    __('An error occurred while saving')
+  )
+}
+
 async function submit() {
   if (!validateStep(currentStep.value)) return
 
@@ -641,24 +664,19 @@ async function submit() {
 
   try {
     if (isNew.value) {
-      const resource = createResource({
-        url: 'crm.api.partner_report.create_partner_report',
-        params: { data: payload },
-      })
-      await resource.submit()
-      const newName = resource.data
+      const newName = await createReportResource.submit({ data: payload })
       toast({ title: 'Report submitted successfully', icon: 'check', iconClasses: 'text-green-500' })
-      router.push({ name: 'PartnerReport', params: { reportId: newName } })
+      emit('submitted', newName)
+      if (!props.inDialog) {
+        router.push({ name: 'PartnerReport', params: { reportId: newName } })
+      }
     } else {
-      const resource = createResource({
-        url: 'crm.api.partner_report.update_partner_report',
-        params: { name: props.reportId, data: payload },
-      })
-      await resource.submit()
+      await updateReportResource.submit({ name: props.reportId, data: payload })
       toast({ title: 'Report saved', icon: 'check', iconClasses: 'text-green-500' })
+      emit('saved', props.reportId)
     }
   } catch (e) {
-    saveError.value = e.message || 'An error occurred while saving'
+    saveError.value = getErrorMessage(e)
   } finally {
     saving.value = false
   }

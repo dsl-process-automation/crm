@@ -72,6 +72,8 @@
         />
       </div>
     </div>
+
+    <PartnerReportModal v-if="showPartnerReportModal" v-model="showPartnerReportModal" @submitted="handleSubmitted" />
   </div>
 </template>
 
@@ -81,11 +83,13 @@ import { useRouter } from 'vue-router'
 import { createResource, Button, LoadingIndicator } from 'frappe-ui'
 import PartnerReportIcon from '@/components/Icons/PartnerReportIcon.vue'
 import SatisfactionBadge from '@/components/PartnerReports/SatisfactionBadge.vue'
+import PartnerReportModal from '@/components/Modals/PartnerReportModal.vue'
 
 const router = useRouter()
 
 const page = ref(1)
 const PAGE_LENGTH = 25
+const showPartnerReportModal = ref(false)
 
 const reports = createResource({
   url: 'crm.api.partner_report.get_partner_reports',
@@ -104,10 +108,15 @@ function loadMore() {
 }
 
 function createNew() {
-  router.push({ name: 'PartnerReport', params: { reportId: 'new' } })
+  showPartnerReportModal.value = true
 }
 
 function openReport(name) {
+  router.push({ name: 'PartnerReport', params: { reportId: name } })
+}
+
+function handleSubmitted(name) {
+  reports.reload()
   router.push({ name: 'PartnerReport', params: { reportId: name } })
 }
 
