@@ -12,7 +12,23 @@ DEMO_ACTIVITIES_KEY = "crm_demo_activities"
 DEMO_DEALS_KEY = "crm_demo_deals"
 
 
+def complete_setup(_args: dict | None = None):
+	sync_currency_with_global_defaults()
+	create_demo_data(_args)
+
+
+def sync_currency_with_global_defaults():
+	default_currency = frappe.db.get_single_value("Global Defaults", "default_currency")
+	if not default_currency:
+		return
+
+	frappe.db.set_single_value("FCRM Settings", "currency", default_currency)
+
+
 def create_demo_data(_args: dict | None = None):
+	if not (_args and _args.get("setup_demo")):
+		return
+
 	if frappe.db.get_default(DEMO_STATE_KEY):
 		return
 
