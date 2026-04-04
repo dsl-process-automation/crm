@@ -79,7 +79,7 @@
                 :class="errors.partner ? 'ring-1 ring-red-400' : ''"
               >
                 <Autocomplete
-                  v-model="form.partner"
+                  v-model="partnerModel"
                   :options="partnerOptions"
                   :placeholder="__('Select partner…')"
                   variant="outline"
@@ -586,13 +586,29 @@ const partnersResource = createResource({
   auto: true,
 })
 
+function normalizePartnerValue(value) {
+  if (!value) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'object') {
+    return value.value || value.name || ''
+  }
+  return ''
+}
+
+const partnerModel = computed({
+  get: () => normalizePartnerValue(form.value.partner),
+  set: (value) => {
+    form.value.partner = normalizePartnerValue(value)
+  },
+})
+
 function formatPartnerLabel(partner) {
   return `${partner.organization_name}${partner.territory ? ` (${partner.territory})` : ''}`
 }
 
 const partners = computed(() => {
   const items = partnersResource.data || []
-  const selectedPartner = form.value.partner || props.initialPartner
+  const selectedPartner = normalizePartnerValue(form.value.partner) || props.initialPartner
   const selectedPartnerLabel =
     selectedPartner === props.initialPartner
       ? props.initialPartnerLabel || selectedPartner
@@ -623,12 +639,14 @@ const partnerOptions = computed(() =>
 )
 
 const partnerName = computed(() => {
-  const found = partners.value.find((p) => p.name === form.value.partner)
-  return found ? formatPartnerLabel(found) : form.value.partner
+  const partnerValue = normalizePartnerValue(form.value.partner)
+  const found = partners.value.find((p) => p.name === partnerValue)
+  return found ? formatPartnerLabel(found) : partnerValue
 })
 
 const partnerTerritory = computed(() => {
-  const found = partners.value.find((p) => p.name === form.value.partner)
+  const partnerValue = normalizePartnerValue(form.value.partner)
+  const found = partners.value.find((p) => p.name === partnerValue)
   return found?.territory || ''
 })
 
@@ -687,6 +705,7 @@ function normalizeReportData(report = {}) {
   return {
     ...defaultForm,
     ...report,
+    partner: normalizePartnerValue(report.partner),
     reporting_month: report.reporting_month?.slice?.(0, 7) || '',
   }
 }
@@ -738,7 +757,7 @@ async function loadReport() {
       isEditing.value = false
     }
   } catch {
-    toast({ title: 'Error loading report', icon: 'x', iconClasses: 'text-red-500' })
+    toast.error(__('Error loading report'))
   } finally {
     loading.value = false
   }
@@ -855,6 +874,7 @@ async function submit() {
   // Convert reporting_month from YYYY-MM to YYYY-MM-01 for Frappe Date field
   const payload = {
     ...form.value,
+    partner: normalizePartnerValue(form.value.partner),
     reporting_month: form.value.reporting_month
       ? form.value.reporting_month + '-01'
       : form.value.reporting_month,
@@ -863,7 +883,7 @@ async function submit() {
   try {
     if (isNew.value) {
       const newName = await createReportResource.submit({ data: payload })
-      toast({ title: 'Report submitted successfully', icon: 'check', iconClasses: 'text-green-500' })
+      toast.success(__('Report submitted successfully'))
       emit('submitted', newName)
       if (!props.inDialog) {
         router.push({ name: 'PartnerReport', params: { reportId: newName } })
@@ -876,7 +896,7 @@ async function submit() {
       }
       isEditing.value = false
       currentStep.value = 0
-      toast({ title: 'Report saved', icon: 'check', iconClasses: 'text-green-500' })
+      toast.success(__('Report saved'))
       emit('saved', props.reportId)
     }
   } catch (e) {

@@ -28,6 +28,7 @@ def after_install(force=False):
 	create_default_manager_dashboard(force)
 	create_assignment_rule_custom_fields()
 	add_assignment_rule_property_setters()
+	backfill_partner_report_regions()
 	frappe.db.commit()
 
 
@@ -310,6 +311,52 @@ def add_email_account_custom_field():
 		)
 
 		frappe.clear_cache(doctype="Email Account")
+
+
+def backfill_partner_report_regions():
+	if not frappe.db.has_column("CRM Partner Report", "region") or not frappe.get_meta("User").has_field("region"):
+		return
+
+	user_regions = {}
+	for row in frappe.get_all(
+		"User",
+		fields=["name", "region"],
+		filters={"region": ["is", "set"]},
+		page_length=0,
+	):
+		region = _resolve_region_link_value(row.region)
+		if region:
+			user_regions[row.name] = region
+
+	if not user_regions:
+		return
+
+	for report in frappe.get_all(
+		"CRM Partner Report",
+		fields=["name", "submitted_by", "region"],
+		filters={"submitted_by": ["in", list(user_regions.keys())]},
+		page_length=0,
+	):
+		if report.region:
+			continue
+
+		region = user_regions.get(report.submitted_by)
+		if region:
+			frappe.db.set_value("CRM Partner Report", report.name, "region", region, update_modified=False)
+
+
+def _resolve_region_link_value(value: str | None) -> str | None:
+	if not value:
+		return None
+
+	region = str(value).strip()
+	if not region:
+		return None
+
+	if frappe.db.exists("CRM Territory", region):
+		return region
+
+	return frappe.db.get_value("CRM Territory", {"territory_name": region}, "name")
 
 
 def add_default_industries():

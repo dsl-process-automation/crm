@@ -5,11 +5,11 @@
     </template>
     <template #right-header>
       <CustomActions
-        v-if="partnerReportsListView?.customListActions"
+        v-if="tabIndex === 0 && partnerReportsListView?.customListActions"
         :actions="partnerReportsListView.customListActions"
       />
       <Button
-        v-if="permissions.data?.permissions?.create"
+        v-if="tabIndex === 0 && permissions.data?.permissions?.create"
         variant="solid"
         :label="__('New Report')"
         iconLeft="plus"
@@ -17,45 +17,69 @@
       />
     </template>
   </LayoutHeader>
-  <ViewControls
-    ref="viewControls"
-    v-model="partnerReports"
-    v-model:loadMore="loadMore"
-    v-model:resizeColumn="triggerResize"
-    v-model:updatedPageCount="updatedPageCount"
-    doctype="CRM Partner Report"
-    :options="{
-      defaultViewName: __('Partner Reports View'),
-      allowedViews: ['list', 'group_by'],
-    }"
-  />
-  <PartnerReportsListView
-    v-if="partnerReports.data && rows.length"
-    ref="partnerReportsListView"
-    v-model="partnerReports.data.page_length_count"
-    v-model:list="partnerReports"
-    :rows="rows"
-    :columns="columns"
-    :options="{
-      showTooltip: false,
-      resizeColumn: true,
-      rowCount: partnerReports.data.row_count,
-      totalCount: partnerReports.data.total_count,
-      canDelete: permissions.data?.permissions?.delete,
-    }"
-    @loadMore="() => loadMore++"
-    @columnWidthUpdated="() => triggerResize++"
-    @updatePageCount="(count) => (updatedPageCount = count)"
-    @showReport="showReport"
-    @applyFilter="(data) => viewControls.applyFilter(data)"
-    @selectionsChanged="(selections) => viewControls.updateSelections(selections)"
-  />
-  <EmptyState
-    v-else-if="partnerReports.data && !rows.length"
-    name="Partner Reports"
-    :icon="PartnerReportIcon"
-    :description="__('It appears that there are currently no Partner Reports available. You can create a Partner Report using the New Report button.')"
-  />
+  <Tabs
+    v-model="tabIndex"
+    as="div"
+    :tabs="tabs"
+    class="flex h-full flex-1 flex-col overflow-hidden [&_[role='tablist']]:gap-7.5 [&_[role='tablist']]:border-b [&_[role='tablist']]:px-5 [&_[role='tabpanel']:not([hidden])]:flex [&_[role='tabpanel']:not([hidden])]:min-h-0 [&_[role='tabpanel']:not([hidden])]:grow"
+  >
+    <template #tab-item="{ tab, selected }">
+      <button
+        class="group flex items-center gap-2 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:text-ink-gray-9"
+        :class="{ 'border-outline-gray-4 text-ink-gray-9': selected }"
+      >
+        {{ __(tab.label) }}
+      </button>
+    </template>
+    <template #tab-panel>
+      <template v-if="tabs[tabIndex]?.name === 'Partner Reports'">
+        <ViewControls
+          ref="viewControls"
+          v-model="partnerReports"
+          v-model:loadMore="loadMore"
+          v-model:resizeColumn="triggerResize"
+          v-model:updatedPageCount="updatedPageCount"
+          doctype="CRM Partner Report"
+          :options="{
+            defaultViewName: __('Partner Reports View'),
+            allowedViews: ['list', 'group_by'],
+          }"
+        />
+        <PartnerReportsListView
+          v-if="partnerReports.data && rows.length"
+          ref="partnerReportsListView"
+          v-model="partnerReports.data.page_length_count"
+          v-model:list="partnerReports"
+          :rows="rows"
+          :columns="columns"
+          :options="{
+            showTooltip: false,
+            resizeColumn: true,
+            rowCount: partnerReports.data.row_count,
+            totalCount: partnerReports.data.total_count,
+            canDelete: permissions.data?.permissions?.delete,
+          }"
+          @loadMore="() => loadMore++"
+          @columnWidthUpdated="() => triggerResize++"
+          @updatePageCount="(count) => (updatedPageCount = count)"
+          @showReport="showReport"
+          @applyFilter="(data) => viewControls.applyFilter(data)"
+          @selectionsChanged="(selections) => viewControls.updateSelections(selections)"
+        />
+        <EmptyState
+          v-else-if="partnerReports.data && !rows.length"
+          name="Partner Reports"
+          :icon="PartnerReportIcon"
+          :description="__('It appears that there are currently no Partner Reports available. You can create a Partner Report using the New Report button.')"
+        />
+      </template>
+      <PartnerReportAnalysisTab
+        v-else-if="tabs[tabIndex]?.name === 'Group Number Analysis'"
+        metric-group="group"
+      />
+      <PartnerReportAnalysisTab v-else metric-group="backup" />
+    </template>
+  </Tabs>
   <PartnerReportModal
     v-if="showPartnerReportModal"
     v-model="showPartnerReportModal"
@@ -72,11 +96,12 @@ import LayoutHeader from '@/components/LayoutHeader.vue'
 import PartnerReportIcon from '@/components/Icons/PartnerReportIcon.vue'
 import PartnerReportModal from '@/components/Modals/PartnerReportModal.vue'
 import PartnerReportsListView from '@/components/ListViews/PartnerReportsListView.vue'
+import PartnerReportAnalysisTab from '@/components/PartnerReports/PartnerReportAnalysisTab.vue'
 import ViewControls from '@/components/ViewControls.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import { usersStore } from '@/stores/users'
 import { formatDate, timeAgo } from '@/utils'
-import { Button, createResource } from 'frappe-ui'
+import { Button, Tabs, createResource } from 'frappe-ui'
 import { computed, ref } from 'vue'
 
 const { getUser } = usersStore()
@@ -89,6 +114,13 @@ const viewControls = ref(null)
 const partnerReportsListView = ref(null)
 const showPartnerReportModal = ref(false)
 const selectedReportId = ref('new')
+const tabIndex = ref(0)
+
+const tabs = [
+  { name: 'Partner Reports', label: 'Partner Reports' },
+  { name: 'Group Number Analysis', label: 'Group Number Analysis' },
+  { name: 'Back Up Rate Analysis', label: 'Back Up Rate Analysis' },
+]
 
 const permissions = createResource({
   url: 'crm.api.partner_report.get_partner_report_permissions',

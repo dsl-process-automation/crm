@@ -4,7 +4,20 @@ from frappe.model.document import Document
 
 class CRMPartnerReport(Document):
 	def before_insert(self):
-		self.submitted_by = frappe.session.user
+		self.submitted_by = self.submitted_by or frappe.session.user
+
+		# Tolerate sites that have code updated before DocType metadata is migrated.
+		if not self.meta.has_field("region"):
+			return
+
+		region = _resolve_region_link_value(self.get("region"))
+		if not region and self.submitted_by and frappe.get_meta("User").has_field("region"):
+			region = _resolve_region_link_value(
+				frappe.db.get_value("User", self.submitted_by, "region")
+			)
+
+		if region:
+			self.set("region", region)
 
 	@staticmethod
 	def default_list_data():
@@ -58,3 +71,17 @@ class CRMPartnerReport(Document):
 			"creation",
 		]
 		return {"columns": columns, "rows": rows}
+
+
+def _resolve_region_link_value(value: str | None) -> str | None:
+	if not value:
+		return None
+
+	region = str(value).strip()
+	if not region:
+		return None
+
+	if frappe.db.exists("CRM Territory", region):
+		return region
+
+	return frappe.db.get_value("CRM Territory", {"territory_name": region}, "name")
