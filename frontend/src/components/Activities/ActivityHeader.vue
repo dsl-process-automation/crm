@@ -11,14 +11,14 @@
       variant="solid"
       :label="__('New Email')"
       iconLeft="plus"
-      @click="emailBox.show = true"
+      @click="showEmailComposer"
     />
     <Button
       v-else-if="title == 'Comments'"
       variant="solid"
       :label="__('New Comment')"
       iconLeft="plus"
-      @click="emailBox.showComment = true"
+      @click="showCommentComposer"
     />
     <MultiActionButton
       v-else-if="title == 'Calls'"
@@ -113,17 +113,29 @@ const showWhatsappTemplates = defineModel('showWhatsappTemplates', {
 const showFilesUploader = defineModel('showFilesUploader', { type: Boolean })
 const emailBox = defineModel('emailBox', { type: Object, default: () => ({}) })
 
+function showEmailComposer() {
+  if (emailBox.value) {
+    emailBox.value.show = true
+  }
+}
+
+function showCommentComposer() {
+  if (emailBox.value) {
+    emailBox.value.showComment = true
+  }
+}
+
 const defaultActions = computed(() => {
   let actions = [
     {
       icon: h(Email2Icon, { class: 'h-4 w-4' }),
       label: __('Email'),
-      onClick: () => (emailBox.value.show = true),
+      onClick: showEmailComposer,
     },
     {
       icon: h(CommentIcon, { class: 'h-4 w-4' }),
       label: __('Comment'),
-      onClick: () => (emailBox.value.showComment = true),
+      onClick: showCommentComposer,
     },
     {
       icon: h(EventIcon, { class: 'h-4 w-4' }),

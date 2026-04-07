@@ -91,7 +91,7 @@ import { usersStore } from '@/stores/users'
 import { useStorage } from '@vueuse/core'
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
 import { call, createResource, toast } from 'frappe-ui'
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, nextTick } from 'vue'
 
 const props = defineProps({
   doctype: { type: String, default: 'CRM Lead' },
@@ -160,9 +160,11 @@ function setSignature(editor) {
 
 watch(
   () => showEmailBox.value,
-  (value) => {
+  async (value) => {
     if (value) {
-      let editor = newEmailEditor.value.editor
+      await nextTick()
+      let editor = newEmailEditor.value?.editor
+      if (!editor) return
       editor.commands.focus()
       setSignature(editor)
     }
@@ -171,9 +173,10 @@ watch(
 
 watch(
   () => showCommentBox.value,
-  (value) => {
+  async (value) => {
     if (value) {
-      newCommentEditor.value.editor.commands.focus()
+      await nextTick()
+      newCommentEditor.value?.editor?.commands.focus()
     }
   },
 )
