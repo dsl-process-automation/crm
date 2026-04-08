@@ -258,23 +258,31 @@ def get_partners_for_user() -> list[dict]:
 	"""Return Organizations with contract_status Active, Expired, or unset,
 	filtered to the current user's territories if they manage any."""
 	user = frappe.session.user
+
+	# Find territories managed by this user
 	managed_territories = frappe.db.get_all(
 		"CRM Territory",
 		filters={"territory_manager": user},
 		pluck="name",
 	)
 
-	base_filters = [["contract_status", "not in", ["Prospect", "Terminated"]]]
+	# Include orgs whose contract_status is Active, Expired, or not yet set
+	base_filters = [
+		["contract_status", "not in", ["Prospect", "Terminated"]],
+	]
+
 	if managed_territories:
 		base_filters.append(["territory", "in", managed_territories])
 
-	return frappe.get_list(
+	orgs = frappe.get_list(
 		"CRM Organization",
 		filters=base_filters,
 		fields=["name", "organization_name", "territory", "contract_status"],
 		order_by="organization_name asc",
 		page_length=500,
 	)
+
+	return orgs
 
 
 def _get_month_buckets_for_filters(

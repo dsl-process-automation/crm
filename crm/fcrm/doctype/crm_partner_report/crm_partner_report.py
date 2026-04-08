@@ -1,8 +1,25 @@
 import frappe
 from frappe.model.document import Document
+from frappe.utils.html_utils import sanitize_html
+
+
+RICH_TEXT_FIELDS = (
+	"achievements",
+	"partner_satisfaction_details",
+	"insights_issues",
+	"next_steps_with_partner",
+	"group_satisfaction_details",
+	"group_number_difference_reason",
+	"reasons_for_groups_not_backing_up",
+	"support_plan_for_backups",
+	"insights_data_concerns",
+)
 
 
 class CRMPartnerReport(Document):
+	def validate(self):
+		self._sanitize_rich_text_fields()
+
 	def before_insert(self):
 		self.submitted_by = self.submitted_by or frappe.session.user
 
@@ -71,6 +88,14 @@ class CRMPartnerReport(Document):
 			"creation",
 		]
 		return {"columns": columns, "rows": rows}
+
+	def _sanitize_rich_text_fields(self):
+		for fieldname in RICH_TEXT_FIELDS:
+			value = self.get(fieldname)
+			if not isinstance(value, str) or not value:
+				continue
+
+			self.set(fieldname, sanitize_html(value, always_sanitize=True))
 
 
 def _resolve_region_link_value(value: str | None) -> str | None:

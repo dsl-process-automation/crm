@@ -64,39 +64,84 @@
         class="document-section"
       >
         <h4 class="document-heading">{{ section.title.toUpperCase() }} {{ __('Updates').toUpperCase() }}</h4>
-        <ol class="space-y-4 pl-5">
-          <li
-            v-for="item in section.items"
-            :key="item.key"
+        <div class="space-y-5">
+          <template v-for="item in section.items" :key="item.key">
+            <div class="page-break">
+              <div>
+                <strong>{{ item.question }}</strong>
+                <span v-if="item.type === 'number'"> {{ item.answerText }}</span>
+              </div>
+              <template v-if="item.type !== 'number'">
+                <div
+                  v-if="item.answerText"
+                  class="document-primary-answer"
+                  :class="{ 'document-primary-answer--highlight': item.highlightAnswer }"
+                >
+                  <cite v-if="item.highlightAnswer">{{ item.answerText }}</cite>
+                  <template v-else>{{ item.answerText }}</template>
+                </div>
+                <div
+                  v-if="item.answerHtml"
+                  class="prose-f mt-2 max-w-none text-[14px] leading-6"
+                  v-html="item.answerHtml"
+                />
+                <div
+                  v-for="(subAnswer, idx) in item.subAnswers"
+                  :key="`${item.key}-sub-${idx}`"
+                  class="prose-f mt-2 max-w-none text-[14px] leading-6"
+                  v-html="subAnswer"
+                />
+              </template>
+            </div>
+          </template>
+
+          <div
+            v-if="section.statItems?.length"
             class="page-break"
           >
-            <div>
-              <strong>{{ item.question }}</strong>
-              <span v-if="item.type === 'number'"> {{ item.answerText }}</span>
+            <h5 class="document-subheading">{{ __('Group Stats') }}</h5>
+            <div class="document-stats-table-wrapper">
+              <table class="document-stats-table">
+                <tbody>
+                  <tr v-for="item in section.statItems" :key="`${section.key}-${item.key}`">
+                    <td class="document-stats-table__label">{{ item.question }}</td>
+                    <td class="document-stats-table__value">{{ item.answerText }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <template v-if="item.type !== 'number'">
-              <div
-                v-if="item.answerText"
-                class="document-primary-answer"
-                :class="{ 'document-primary-answer--highlight': item.highlightAnswer }"
-              >
-                <cite v-if="item.highlightAnswer">{{ item.answerText }}</cite>
-                <template v-else>{{ item.answerText }}</template>
+          </div>
+
+          <template v-for="item in section.trailingItems" :key="`${section.key}-${item.key}`">
+            <div class="page-break">
+              <div>
+                <strong>{{ item.question }}</strong>
+                <span v-if="item.type === 'number'"> {{ item.answerText }}</span>
               </div>
-              <div
-                v-if="item.answerHtml"
-                class="prose-f mt-2 max-w-none text-[14px] leading-6"
-                v-html="item.answerHtml"
-              />
-              <div
-                v-for="(subAnswer, idx) in item.subAnswers"
-                :key="`${item.key}-sub-${idx}`"
-                class="prose-f mt-2 max-w-none text-[14px] leading-6"
-                v-html="subAnswer"
-              />
-            </template>
-          </li>
-        </ol>
+              <template v-if="item.type !== 'number'">
+                <div
+                  v-if="item.answerText"
+                  class="document-primary-answer"
+                  :class="{ 'document-primary-answer--highlight': item.highlightAnswer }"
+                >
+                  <cite v-if="item.highlightAnswer">{{ item.answerText }}</cite>
+                  <template v-else>{{ item.answerText }}</template>
+                </div>
+                <div
+                  v-if="item.answerHtml"
+                  class="prose-f mt-2 max-w-none text-[14px] leading-6"
+                  v-html="item.answerHtml"
+                />
+                <div
+                  v-for="(subAnswer, idx) in item.subAnswers"
+                  :key="`${item.key}-sub-${idx}`"
+                  class="prose-f mt-2 max-w-none text-[14px] leading-6"
+                  v-html="subAnswer"
+                />
+              </template>
+            </div>
+          </template>
+        </div>
       </section>
     </div>
   </div>
@@ -185,6 +230,15 @@ function numberItem(key, question, answerText) {
     answerText,
   }
 }
+
+const groupStatsKeys = [
+  'num_of_groups_on_insights',
+  'num_of_registered_groups',
+  'percentage_of_two_plus_not_backed_up_groups',
+  'percentage_of_never_backed_up_groups',
+]
+
+const groupIntroKeys = ['group_satisfaction']
 
 const reportingMonthLabel = computed(() => formatMonth(props.report.reporting_month))
 const submittedAtLabel = computed(() => formatDateTime(props.report.creation))
@@ -301,16 +355,34 @@ const sections = computed(() => {
     },
   ]
 
-  return sectionGroups.map((section) => ({
-    ...section,
-    items: section.items.filter((item) => {
+  return sectionGroups.map((section) => {
+    const filteredItems = section.items.filter((item) => {
       if (item.type === 'number') {
         return item.answerText !== __('Not provided')
       }
 
       return item.answerText || item.answerHtml || item.subAnswers?.length
-    }),
-  }))
+    })
+
+    if (section.key !== 'groups') {
+      return {
+        ...section,
+        items: filteredItems,
+        statItems: [],
+        trailingItems: [],
+      }
+    }
+
+    return {
+      ...section,
+      items: filteredItems.filter((item) => groupIntroKeys.includes(item.key)),
+      statItems: filteredItems.filter((item) => groupStatsKeys.includes(item.key)),
+      trailingItems: filteredItems.filter(
+        (item) =>
+          !groupIntroKeys.includes(item.key) && !groupStatsKeys.includes(item.key),
+      ),
+    }
+  })
 })
 </script>
 
@@ -326,6 +398,13 @@ const sections = computed(() => {
   font-weight: 700;
 }
 
+.document-subheading {
+  margin-bottom: 12px;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .document-primary-answer {
   margin-top: 8px;
 }
@@ -338,5 +417,36 @@ const sections = computed(() => {
 
 .page-break {
   break-inside: avoid;
+}
+
+.document-stats-table-wrapper {
+  overflow: hidden;
+  border: 1px solid #374151;
+}
+
+.document-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.document-stats-table td {
+  border-bottom: 1px solid #374151;
+  padding: 12px 14px;
+  vertical-align: top;
+}
+
+.document-stats-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.document-stats-table__label {
+  width: 80%;
+  border-right: 1px solid #374151;
+}
+
+.document-stats-table__value {
+  width: 20%;
+  text-align: right;
+  font-weight: 600;
 }
 </style>

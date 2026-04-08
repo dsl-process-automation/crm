@@ -223,6 +223,8 @@
   <PartnerReportModal
     v-if="showPartnerReportModal"
     v-model="showPartnerReportModal"
+    v-model:reportId="selectedPartnerReportId"
+    :report-ids="organizationPartnerReportIds"
     :report-id="selectedPartnerReportId"
     :initial-partner="props.organizationId"
     :initial-partner-label="organization.doc?.organization_name || props.organizationId"
@@ -595,6 +597,10 @@ const organizationPartnerReportRows = computed(() => {
     return mappedRow
   })
 })
+
+const organizationPartnerReportIds = computed(() =>
+  organizationPartnerReportRows.value.map((report) => report.name).filter(Boolean),
+)
 
 const organizationPartnerReportColumns = computed(() => {
   let listColumns = organizationPartnerReports.data?.columns || []

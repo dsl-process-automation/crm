@@ -83,6 +83,8 @@
   <PartnerReportModal
     v-if="showPartnerReportModal"
     v-model="showPartnerReportModal"
+    v-model:reportId="selectedReportId"
+    :report-ids="visibleReportIds"
     :report-id="selectedReportId"
     @submitted="handleSubmitted"
     @saved="handleSaved"
@@ -121,6 +123,8 @@ const tabs = [
   { name: 'Group Number Analysis', label: 'Group Number Analysis' },
   { name: 'Back Up Rate Analysis', label: 'Back Up Rate Analysis' },
 ]
+
+const visibleReportIds = computed(() => rows.value.map((report) => report.name).filter(Boolean))
 
 const permissions = createResource({
   url: 'crm.api.partner_report.get_partner_report_permissions',

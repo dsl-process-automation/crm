@@ -109,6 +109,17 @@ def get_filterable_fields(doctype: str):
 			field["name"] = field.get("fieldname")
 			res.append(field)
 
+	if doctype == "CRM Partner Report" and not any(field.get("fieldname") == "country" for field in res):
+		res.append(
+			{
+				"fieldname": "country",
+				"fieldtype": "Link",
+				"label": "Country",
+				"options": "Country",
+				"name": "country",
+			}
+		)
+
 	for field in res:
 		field["label"] = _(field.get("label"))
 		field["value"] = field.get("fieldname")
@@ -322,6 +333,8 @@ def get_data(
 		default_filters = frappe.parse_json(default_filters)
 		filters.update(default_filters)
 
+	query_filters = get_query_filters(doctype, filters)
+
 	is_default = True
 	data = []
 	_list = get_controller(doctype)
@@ -385,7 +398,7 @@ def get_data(
 			frappe.get_list(
 				doctype,
 				fields=rows,
-				filters=filters,
+				filters=query_filters,
 				order_by=order_by,
 				page_length=page_length,
 			)
@@ -430,8 +443,8 @@ def get_data(
 			column_filters = []
 
 			# Convert and add the main filters first
-			if filters:
-				base_filters = convert_filter_to_tuple(doctype, filters)
+			if query_filters:
+				base_filters = convert_filter_to_tuple(doctype, query_filters)
 				column_filters.extend(base_filters)
 
 			# Add the column-specific filter
@@ -560,7 +573,7 @@ def get_data(
 		"page_length_count": page_length_count,
 		"is_default": is_default,
 		"views": get_views(doctype),
-		"total_count": frappe.get_list(doctype, filters=filters, fields=[COUNT_NAME])[0].total_count,
+		"total_count": frappe.get_list(doctype, filters=query_filters, fields=[COUNT_NAME])[0].total_count,
 		"row_count": len(data),
 		"form_script": get_form_script(doctype),
 		"list_script": get_form_script(doctype, "List"),
@@ -575,7 +588,35 @@ def parse_list_data(data, doctype):
 	return data
 
 
+def get_query_filters(doctype, filters):
+	if doctype != "CRM Partner Report" or "country" not in filters:
+		return filters
+
+	query_filters = convert_filter_to_tuple(
+		doctype,
+		{key: value for key, value in filters.items() if key != "country"},
+	)
+	partner_names = get_partner_report_partner_names_by_country(filters.get("country"))
+	query_filters.append([doctype, "partner", "in", partner_names or [""]])
+	return query_filters
+
+
+def get_partner_report_partner_names_by_country(country_filter):
+	address_names = frappe.get_all("Address", filters={"country": country_filter}, pluck="name")
+	if not address_names:
+		return []
+
+	return frappe.get_all(
+		"CRM Organization",
+		filters={"address": ["in", address_names]},
+		pluck="name",
+	)
+
+
 def convert_filter_to_tuple(doctype, filters):
+	if isinstance(filters, list):
+		return filters
+
 	if isinstance(filters, dict):
 		filters_items = filters.items()
 		filters = []
