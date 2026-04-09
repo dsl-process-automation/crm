@@ -26,12 +26,14 @@
     <template #tab-panel>
       <template v-if="tabs[tabIndex]?.name === 'Partner Reports'">
         <ViewControls
+          :key="listFiltersKey"
           ref="viewControls"
           v-model="partnerReports"
           v-model:loadMore="loadMore"
           v-model:resizeColumn="triggerResize"
           v-model:updatedPageCount="updatedPageCount"
           doctype="CRM Partner Report"
+          :filters="listDefaultFilters"
           :options="{
             defaultViewName: __('Partner Reports View'),
             allowedViews: ['list', 'group_by'],
@@ -68,8 +70,9 @@
       <PartnerReportAnalysisTab
         v-else-if="tabs[tabIndex]?.name === 'Group Number Analysis'"
         metric-group="group"
+        v-model:filters="sharedFilters"
       />
-      <PartnerReportAnalysisTab v-else metric-group="backup" />
+      <PartnerReportAnalysisTab v-else metric-group="backup" v-model:filters="sharedFilters" />
     </template>
   </Tabs>
   <PartnerReportModal
@@ -96,7 +99,9 @@ import EmptyState from '@/components/ListViews/EmptyState.vue'
 import { usersStore } from '@/stores/users'
 import { formatDate, timeAgo } from '@/utils'
 import { Button, Tabs, createResource } from 'frappe-ui'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+
+const SHARED_FILTER_STORAGE_KEY = 'crm.partnerReports.sharedFilters'
 
 const { getUser } = usersStore()
 
@@ -109,6 +114,7 @@ const partnerReportsListView = ref(null)
 const showPartnerReportModal = ref(false)
 const selectedReportId = ref('new')
 const tabIndex = ref(0)
+const sharedFilters = ref(loadSharedFilters())
 
 const tabs = [
   { name: 'Partner Reports', label: 'Partner Reports' },
@@ -117,12 +123,29 @@ const tabs = [
 ]
 
 const visibleReportIds = computed(() => rows.value.map((report) => report.name).filter(Boolean))
+const listDefaultFilters = computed(() => buildListDefaultFilters(sharedFilters.value))
+const listFiltersKey = computed(() => JSON.stringify(listDefaultFilters.value))
 
 const permissions = createResource({
   url: 'crm.api.partner_report.get_partner_report_permissions',
   auto: true,
   initialData: { permissions: {} },
 })
+
+watch(
+  sharedFilters,
+  (value) => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(
+      SHARED_FILTER_STORAGE_KEY,
+      JSON.stringify(normalizeSharedFilters(value)),
+    )
+  },
+  { deep: true },
+)
 
 const rows = computed(() => {
   if (
@@ -204,5 +227,158 @@ function formatReportingMonth(dateString) {
     year: 'numeric',
     month: 'long',
   })
+}
+
+function createDefaultSharedFilters() {
+  return {
+    regions: [],
+    countries: [],
+    partners: [],
+    monthFilter: null,
+  }
+}
+
+function normalizeStringArray(values) {
+  if (!Array.isArray(values)) {
+    return []
+  }
+
+  return Array.from(
+    new Set(
+      values
+        .map((value) => `${value ?? ''}`.trim())
+        .filter(Boolean),
+    ),
+  )
+}
+
+function normalizeMonthFilter(filter) {
+  if (!filter || typeof filter !== 'object') {
+    return null
+  }
+
+  if (filter.mode === 'custom') {
+    return {
+      mode: 'custom',
+      quickMonths: Number(filter.quickMonths) || 3,
+      startYear: Number(filter.startYear),
+      startMonth: Number(filter.startMonth),
+      endYear: Number(filter.endYear),
+      endMonth: Number(filter.endMonth),
+    }
+  }
+
+  if (filter.mode === 'quick') {
+    return {
+      mode: 'quick',
+      quickMonths: Math.max(1, Number(filter.quickMonths) || 3),
+      startYear: Number(filter.startYear) || 0,
+      startMonth: Number(filter.startMonth) || 0,
+      endYear: Number(filter.endYear) || 0,
+      endMonth: Number(filter.endMonth) || 0,
+    }
+  }
+
+  return null
+}
+
+function normalizeSharedFilters(value) {
+  const defaults = createDefaultSharedFilters()
+  const nextValue = value && typeof value === 'object' ? value : {}
+
+  return {
+    regions: normalizeStringArray(nextValue.regions ?? defaults.regions),
+    countries: normalizeStringArray(nextValue.countries ?? defaults.countries),
+    partners: normalizeStringArray(nextValue.partners ?? defaults.partners),
+    monthFilter: normalizeMonthFilter(nextValue.monthFilter ?? defaults.monthFilter),
+  }
+}
+
+function loadSharedFilters() {
+  if (typeof window === 'undefined') {
+    return createDefaultSharedFilters()
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(SHARED_FILTER_STORAGE_KEY)
+    if (!rawValue) {
+      return createDefaultSharedFilters()
+    }
+
+    return normalizeSharedFilters(JSON.parse(rawValue))
+  } catch {
+    return createDefaultSharedFilters()
+  }
+}
+
+function buildListDefaultFilters(filters) {
+  const normalizedFilters = normalizeSharedFilters(filters)
+  const listFilters = {}
+
+  if (normalizedFilters.regions.length) {
+    listFilters.region = ['in', normalizedFilters.regions]
+  }
+
+  if (normalizedFilters.countries.length) {
+    listFilters.country = ['in', normalizedFilters.countries]
+  }
+
+  if (normalizedFilters.partners.length) {
+    listFilters.partner = ['in', normalizedFilters.partners]
+  }
+
+  const monthWindow = resolveMonthWindow(normalizedFilters.monthFilter)
+  if (monthWindow) {
+    listFilters.reporting_month = [
+      'between',
+      [
+        formatDateLiteral(monthWindow.startYear, monthWindow.startMonth, 1),
+        formatDateLiteral(
+          monthWindow.endYear,
+          monthWindow.endMonth,
+          getLastDayOfMonth(monthWindow.endYear, monthWindow.endMonth),
+        ),
+      ],
+    ]
+  }
+
+  return listFilters
+}
+
+function resolveMonthWindow(filter) {
+  if (!filter) {
+    return null
+  }
+
+  if (filter.mode === 'custom') {
+    return {
+      startYear: Number(filter.startYear),
+      startMonth: Number(filter.startMonth),
+      endYear: Number(filter.endYear),
+      endMonth: Number(filter.endMonth),
+    }
+  }
+
+  const endDate = new Date()
+  const endYear = endDate.getFullYear()
+  const endMonth = endDate.getMonth()
+  const monthCount = Math.max(1, Number(filter.quickMonths) || 3)
+  const startDate = new Date(endYear, endMonth, 1)
+  startDate.setMonth(startDate.getMonth() - (monthCount - 1))
+
+  return {
+    startYear: startDate.getFullYear(),
+    startMonth: startDate.getMonth(),
+    endYear,
+    endMonth,
+  }
+}
+
+function formatDateLiteral(year, monthIndex, day) {
+  return [year, `${monthIndex + 1}`.padStart(2, '0'), `${day}`.padStart(2, '0')].join('-')
+}
+
+function getLastDayOfMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate()
 }
 </script>

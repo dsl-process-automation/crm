@@ -419,18 +419,20 @@ const props = defineProps({
 		type: String,
 		required: true,
 	},
+	filters: {
+		type: Object,
+		default: () => ({}),
+	},
 })
 
-const selectedRegions = ref([])
-const selectedCountries = ref([])
-const selectedPartners = ref([])
+const emit = defineEmits(['update:filters'])
+
 const queries = reactive({
 	regions: '',
 	countries: '',
 	partners: '',
 })
 
-const monthFilter = ref(null)
 const showDateDialog = ref(false)
 const showExportDialog = ref(false)
 const dateMode = ref('quick')
@@ -468,6 +470,24 @@ const yearOptions = Array.from({ length: 8 }, (_, index) => currentYear - 3 + in
 	label: `${value}`,
 	value,
 }))
+
+const normalizedFilters = computed(() => normalizeFilters(props.filters))
+const selectedRegions = computed({
+	get: () => normalizedFilters.value.regions,
+	set: (value) => updateFilters({ regions: value }),
+})
+const selectedCountries = computed({
+	get: () => normalizedFilters.value.countries,
+	set: (value) => updateFilters({ countries: value }),
+})
+const selectedPartners = computed({
+	get: () => normalizedFilters.value.partners,
+	set: (value) => updateFilters({ partners: value }),
+})
+const monthFilter = computed({
+	get: () => normalizedFilters.value.monthFilter,
+	set: (value) => updateFilters({ monthFilter: value }),
+})
 
 const draftMonthFilter = reactive(createDefaultDraftMonthFilter())
 const exportRange = reactive(createDefaultExportRange())
@@ -526,18 +546,12 @@ const analytics = createResource({
 })
 
 watch(selectedRegions, () => {
-	selectedCountries.value = []
-	selectedPartners.value = []
-	queries.countries = ''
-	queries.partners = ''
 	countriesResource.reload()
 	partnersResource.reload()
 	analytics.reload()
 }, { deep: true })
 
 watch(selectedCountries, () => {
-	selectedPartners.value = []
-	queries.partners = ''
 	partnersResource.reload()
 	analytics.reload()
 }, { deep: true })
@@ -738,11 +752,21 @@ function getFilterButtonLabel(baseLabel, count) {
 }
 
 function toggleRegion(value, checked) {
-	selectedRegions.value = toggleSelection(selectedRegions.value, value, checked)
+	updateFilters({
+		regions: toggleSelection(selectedRegions.value, value, checked),
+		countries: [],
+		partners: [],
+	})
+	queries.countries = ''
+	queries.partners = ''
 }
 
 function toggleCountry(value, checked) {
-	selectedCountries.value = toggleSelection(selectedCountries.value, value, checked)
+	updateFilters({
+		countries: toggleSelection(selectedCountries.value, value, checked),
+		partners: [],
+	})
+	queries.partners = ''
 }
 
 function togglePartner(value, checked) {
@@ -760,13 +784,23 @@ function toggleSelection(values, value, checked) {
 }
 
 function clearRegions() {
-	selectedRegions.value = []
+	updateFilters({
+		regions: [],
+		countries: [],
+		partners: [],
+	})
 	queries.regions = ''
+	queries.countries = ''
+	queries.partners = ''
 }
 
 function clearCountries() {
-	selectedCountries.value = []
+	updateFilters({
+		countries: [],
+		partners: [],
+	})
 	queries.countries = ''
+	queries.partners = ''
 }
 
 function clearPartners() {
@@ -864,5 +898,73 @@ function exportAnalytics() {
 	link.href = `/api/method/crm.api.partner_report.export_partner_report_analytics?${params.toString()}`
 	link.click()
 	showExportDialog.value = false
+}
+
+function normalizeFilters(filters) {
+	const value = filters && typeof filters === 'object' ? filters : {}
+	return {
+		regions: normalizeStringArray(value.regions),
+		countries: normalizeStringArray(value.countries),
+		partners: normalizeStringArray(value.partners),
+		monthFilter: normalizeMonthFilter(value.monthFilter),
+	}
+}
+
+function normalizeStringArray(values) {
+	if (!Array.isArray(values)) {
+		return []
+	}
+
+	return Array.from(
+		new Set(
+			values
+				.map((value) => `${value ?? ''}`.trim())
+				.filter(Boolean),
+		),
+	)
+}
+
+function normalizeMonthFilter(filter) {
+	if (!filter || typeof filter !== 'object') {
+		return null
+	}
+
+	if (filter.mode === 'custom') {
+		return {
+			mode: 'custom',
+			quickMonths: Number(filter.quickMonths) || 3,
+			startYear: Number(filter.startYear),
+			startMonth: Number(filter.startMonth),
+			endYear: Number(filter.endYear),
+			endMonth: Number(filter.endMonth),
+		}
+	}
+
+	if (filter.mode === 'quick') {
+		return {
+			mode: 'quick',
+			quickMonths: Math.max(1, Number(filter.quickMonths) || 3),
+			startYear: Number(filter.startYear) || 0,
+			startMonth: Number(filter.startMonth) || 0,
+			endYear: Number(filter.endYear) || 0,
+			endMonth: Number(filter.endMonth) || 0,
+		}
+	}
+
+	return null
+}
+
+function updateFilters(patch) {
+	const nextFilters = {
+		...normalizedFilters.value,
+		...patch,
+	}
+
+	emit('update:filters', {
+		regions: normalizeStringArray(nextFilters.regions),
+		countries: normalizeStringArray(nextFilters.countries),
+		partners: normalizeStringArray(nextFilters.partners),
+		monthFilter: normalizeMonthFilter(nextFilters.monthFilter),
+	})
 }
 </script>
