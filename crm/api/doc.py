@@ -10,6 +10,7 @@ from frappe.utils import make_filter_tuple
 from pypika import Criterion
 
 from crm.api.views import get_views
+from crm.api.partner_report import _get_descendant_territory_names
 from crm.fcrm.doctype.crm_form_script.crm_form_script import get_form_script
 from crm.utils import get_dynamic_linked_docs, get_linked_docs, is_frappe_version
 
@@ -589,7 +590,15 @@ def parse_list_data(data, doctype):
 
 
 def get_query_filters(doctype, filters):
-	if doctype != "CRM Partner Report" or "country" not in filters:
+	if doctype != "CRM Partner Report":
+		return filters
+
+	filters = dict(filters or {})
+	region_scope = get_partner_report_region_scope(filters.get("region"))
+	if region_scope is not None:
+		filters["region"] = ["in", region_scope or [""]]
+
+	if "country" not in filters:
 		return filters
 
 	if frappe.db.has_column("CRM Partner Report", "country"):
@@ -602,6 +611,35 @@ def get_query_filters(doctype, filters):
 	partner_names = get_partner_report_partner_names_by_country(filters.get("country"))
 	query_filters.append([doctype, "partner", "in", partner_names or [""]])
 	return query_filters
+
+
+def get_partner_report_region_scope(region_filter):
+	selected_regions = extract_partner_report_filter_values(region_filter)
+	if selected_regions is None:
+		return None
+
+	return _get_descendant_territory_names(selected_regions, include_self=True)
+
+
+def extract_partner_report_filter_values(filter_value):
+	if filter_value is None:
+		return []
+
+	if isinstance(filter_value, (list, tuple)):
+		if len(filter_value) != 2:
+			return None
+
+		operator, value = filter_value
+		operator = str(operator or "").lower()
+		if operator not in {"in", "=", "=="}:
+			return None
+
+		if isinstance(value, (list, tuple, set)):
+			return [item for item in value if item]
+
+		return [value] if value else []
+
+	return [filter_value] if filter_value else []
 
 
 def get_partner_report_partner_names_by_country(country_filter):
