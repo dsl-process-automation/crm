@@ -147,6 +147,23 @@ watch(
   { deep: true },
 )
 
+watch(
+  () => partnerReports.value?.params?.filters ?? null,
+  (filters) => {
+    if (!filters) {
+      return
+    }
+
+    const nextSharedFilters = buildSharedFiltersFromListFilters(filters)
+    if (getSharedFilterSignature(sharedFilters.value) === getSharedFilterSignature(nextSharedFilters)) {
+      return
+    }
+
+    sharedFilters.value = nextSharedFilters
+  },
+  { deep: true },
+)
+
 const rows = computed(() => {
   if (
     !partnerReports.value?.data?.data ||
@@ -292,6 +309,195 @@ function normalizeSharedFilters(value) {
     partners: normalizeStringArray(nextValue.partners ?? defaults.partners),
     monthFilter: normalizeMonthFilter(nextValue.monthFilter ?? defaults.monthFilter),
   }
+}
+
+function buildSharedFiltersFromListFilters(filters) {
+  const nextFilters = filters && typeof filters === 'object' ? filters : {}
+
+  return normalizeSharedFilters({
+    regions: extractListSelectionValues(nextFilters.region),
+    countries: extractListSelectionValues(nextFilters.country),
+    partners: extractListSelectionValues(nextFilters.partner),
+    monthFilter: extractMonthFilter(nextFilters.reporting_month),
+  })
+}
+
+function extractListSelectionValues(filterValue) {
+  if (filterValue == null || filterValue === '') {
+    return []
+  }
+
+  if (Array.isArray(filterValue) && filterValue.length === 2 && typeof filterValue[0] === 'string') {
+    const operator = filterValue[0].toLowerCase()
+    if (['=', 'equals', 'in'].includes(operator)) {
+      return splitFilterValues(filterValue[1])
+    }
+    return []
+  }
+
+  return splitFilterValues(filterValue)
+}
+
+function splitFilterValues(value) {
+  if (Array.isArray(value)) {
+    return normalizeStringArray(value)
+  }
+
+  if (typeof value === 'string') {
+    if (!value.trim()) {
+      return []
+    }
+
+    if (value.includes(',')) {
+      return normalizeStringArray(value.split(','))
+    }
+
+    return normalizeStringArray([value])
+  }
+
+  if (value == null) {
+    return []
+  }
+
+  return normalizeStringArray([value])
+}
+
+function extractMonthFilter(filterValue) {
+  if (filterValue == null || filterValue === '') {
+    return null
+  }
+
+  if (Array.isArray(filterValue) && filterValue.length === 2 && typeof filterValue[0] === 'string') {
+    const operator = filterValue[0].toLowerCase()
+
+    if (operator === 'between') {
+      const range = extractDateRange(filterValue[1])
+      return range ? buildCustomMonthFilter(range[0], range[1]) : null
+    }
+
+    if (['=', 'equals'].includes(operator)) {
+      const dateValue = parseMonthDateValue(filterValue[1])
+      return dateValue ? buildCustomMonthFilter(dateValue, dateValue) : null
+    }
+
+    return null
+  }
+
+  const range = extractDateRange(filterValue)
+  if (range) {
+    return buildCustomMonthFilter(range[0], range[1])
+  }
+
+  const dateValue = parseMonthDateValue(filterValue)
+  return dateValue ? buildCustomMonthFilter(dateValue, dateValue) : null
+}
+
+function extractDateRange(value) {
+  if (Array.isArray(value) && value.length >= 2) {
+    const startValue = parseMonthDateValue(value[0])
+    const endValue = parseMonthDateValue(value[1])
+
+    if (startValue && endValue) {
+      return [startValue, endValue]
+    }
+
+    return null
+  }
+
+  if (typeof value === 'string') {
+    const separator = value.includes(' to ') ? ' to ' : value.includes(',') ? ',' : null
+    if (!separator) {
+      return null
+    }
+
+    const [startValue, endValue] = value.split(separator).map((item) => item.trim())
+    const startDate = parseMonthDateValue(startValue)
+    const endDate = parseMonthDateValue(endValue)
+
+    if (startDate && endDate) {
+      return [startDate, endDate]
+    }
+  }
+
+  return null
+}
+
+function parseMonthDateValue(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return {
+      year: value.getFullYear(),
+      month: value.getMonth(),
+    }
+  }
+
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmedValue = value.trim()
+  if (!trimmedValue) {
+    return null
+  }
+
+  const literalMatch = trimmedValue.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/)
+  if (literalMatch) {
+    return {
+      year: Number(literalMatch[1]),
+      month: Number(literalMatch[2]) - 1,
+    }
+  }
+
+  const parsedDate = new Date(trimmedValue)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return null
+  }
+
+  return {
+    year: parsedDate.getFullYear(),
+    month: parsedDate.getMonth(),
+  }
+}
+
+function buildCustomMonthFilter(startValue, endValue) {
+  if (!startValue || !endValue) {
+    return null
+  }
+
+  let startYear = Number(startValue.year)
+  let startMonth = Number(startValue.month)
+  let endYear = Number(endValue.year)
+  let endMonth = Number(endValue.month)
+
+  const startDate = new Date(startYear, startMonth, 1)
+  const endDate = new Date(endYear, endMonth, 1)
+  if (endDate < startDate) {
+    ;[startYear, endYear] = [endYear, startYear]
+    ;[startMonth, endMonth] = [endMonth, startMonth]
+  }
+
+  return {
+    mode: 'custom',
+    quickMonths: getInclusiveMonthSpan(startYear, startMonth, endYear, endMonth),
+    startYear,
+    startMonth,
+    endYear,
+    endMonth,
+  }
+}
+
+function getInclusiveMonthSpan(startYear, startMonth, endYear, endMonth) {
+  return Math.max(1, (endYear - startYear) * 12 + (endMonth - startMonth) + 1)
+}
+
+function getSharedFilterSignature(filters) {
+  const normalizedFilters = normalizeSharedFilters(filters)
+
+  return JSON.stringify({
+    regions: [...normalizedFilters.regions].sort(),
+    countries: [...normalizedFilters.countries].sort(),
+    partners: [...normalizedFilters.partners].sort(),
+    monthWindow: resolveMonthWindow(normalizedFilters.monthFilter),
+  })
 }
 
 function loadSharedFilters() {
