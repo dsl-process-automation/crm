@@ -6,13 +6,9 @@
           {{ editMode ? __('Edit Note') : __('Create Note') }}
         </h3>
         <Button
-          v-if="_note?.reference_docname"
+          v-if="linkedReference"
           size="sm"
-          :label="
-            _note.reference_doctype == 'CRM Deal'
-              ? __('Open Deal')
-              : __('Open Lead')
-          "
+          :label="linkedReference.label"
           :iconRight="ArrowUpRightIcon"
           @click="redirect()"
         />
@@ -62,7 +58,7 @@
 import ArrowUpRightIcon from '@/components/Icons/ArrowUpRightIcon.vue'
 import { TextEditor, call } from 'frappe-ui'
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
-import { ref, nextTick, watch } from 'vue'
+import { computed, ref, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -85,6 +81,10 @@ const error = ref(null)
 const title = ref(null)
 const editMode = ref(false)
 let _note = ref({})
+
+const linkedReference = computed(() => {
+  return getReferenceRoute(_note.value.reference_doctype, _note.value.reference_docname)
+})
 
 async function updateNote() {
   if (_note.value.name) {
@@ -128,13 +128,50 @@ async function updateNote() {
 }
 
 function redirect() {
-  if (!props.note?.reference_docname) return
-  let name = props.note.reference_doctype == 'CRM Deal' ? 'Deal' : 'Lead'
-  let params = { leadId: props.note.reference_docname }
-  if (name == 'Deal') {
-    params = { dealId: props.note.reference_docname }
+  if (!linkedReference.value) return
+  router.push({
+    name: linkedReference.value.routeName,
+    params: {
+      [linkedReference.value.paramKey]: linkedReference.value.docname,
+    },
+  })
+}
+
+function getReferenceRoute(doctype, docname) {
+  if (!doctype || !docname) return null
+
+  switch (doctype) {
+    case 'CRM Lead':
+      return {
+        label: __('Open Lead'),
+        routeName: 'Lead',
+        paramKey: 'leadId',
+        docname,
+      }
+    case 'CRM Deal':
+      return {
+        label: __('Open Deal'),
+        routeName: 'Deal',
+        paramKey: 'dealId',
+        docname,
+      }
+    case 'Contact':
+      return {
+        label: __('Open Contact'),
+        routeName: 'Contact',
+        paramKey: 'contactId',
+        docname,
+      }
+    case 'CRM Organization':
+      return {
+        label: __('Open Organization'),
+        routeName: 'Organization',
+        paramKey: 'organizationId',
+        docname,
+      }
+    default:
+      return null
   }
-  router.push({ name: name, params: params })
 }
 
 watch(

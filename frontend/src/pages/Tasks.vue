@@ -123,15 +123,11 @@
       <div class="flex gap-2 items-center justify-between">
         <div>
           <Button
-            v-if="getRow(itemName, 'reference_docname').label"
+            v-if="getReferenceMeta(getRow(itemName, 'reference_doctype').label, getRow(itemName, 'reference_docname').label)"
             class="-ml-2"
             variant="ghost"
             size="sm"
-            :label="
-              getRow(itemName, 'reference_doctype').label == 'CRM Deal'
-                ? __('Deal')
-                : __('Lead')
-            "
+            :label="getReferenceMeta(getRow(itemName, 'reference_doctype').label, getRow(itemName, 'reference_docname').label).shortLabel"
             :iconRight="ArrowUpRightIcon"
             @click.stop="
               redirect(
@@ -395,13 +391,52 @@ async function deletetask(name) {
 }
 
 function redirect(doctype, docname) {
-  if (!docname) return
-  let name = doctype == 'CRM Deal' ? 'Deal' : 'Lead'
-  let params = { leadId: docname }
-  if (name == 'Deal') {
-    params = { dealId: docname }
+  let reference = getReferenceMeta(doctype, docname)
+  if (!reference) return
+
+  router.push({
+    name: reference.routeName,
+    params: {
+      [reference.paramKey]: reference.docname,
+    },
+  })
+}
+
+function getReferenceMeta(doctype, docname) {
+  if (!doctype || !docname) return null
+
+  switch (doctype) {
+    case 'CRM Lead':
+      return {
+        shortLabel: __('Lead'),
+        routeName: 'Lead',
+        paramKey: 'leadId',
+        docname,
+      }
+    case 'CRM Deal':
+      return {
+        shortLabel: __('Deal'),
+        routeName: 'Deal',
+        paramKey: 'dealId',
+        docname,
+      }
+    case 'Contact':
+      return {
+        shortLabel: __('Contact'),
+        routeName: 'Contact',
+        paramKey: 'contactId',
+        docname,
+      }
+    case 'CRM Organization':
+      return {
+        shortLabel: __('Organization'),
+        routeName: 'Organization',
+        paramKey: 'organizationId',
+        docname,
+      }
+    default:
+      return null
   }
-  router.push({ name: name, params: params })
 }
 
 const openTaskFromURL = () => {

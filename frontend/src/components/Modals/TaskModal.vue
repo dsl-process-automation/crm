@@ -6,13 +6,9 @@
           {{ editMode ? __('Edit Task') : __('Create Task') }}
         </h3>
         <Button
-          v-if="task?.reference_docname"
+          v-if="linkedReference"
           size="sm"
-          :label="
-            task.reference_doctype == 'CRM Deal'
-              ? __('Open Deal')
-              : __('Open Lead')
-          "
+          :label="linkedReference.label"
           :iconRight="ArrowUpRightIcon"
           @click="redirect()"
         />
@@ -131,7 +127,7 @@ import {
   FormLabel,
 } from 'frappe-ui'
 import { useOnboarding } from 'frappe-ui/frappe'
-import { ref, watch, nextTick, onMounted } from 'vue'
+import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -161,6 +157,10 @@ const _task = ref({
   priority: 'Low',
   reference_doctype: props.doctype,
   reference_docname: null,
+})
+
+const linkedReference = computed(() => {
+  return getReferenceRoute(_task.value.reference_doctype, _task.value.reference_docname)
 })
 
 const validateTask = () => {
@@ -224,13 +224,50 @@ function updateTaskPriority(priority) {
 }
 
 function redirect() {
-  if (!props.task?.reference_docname) return
-  let name = props.task.reference_doctype == 'CRM Deal' ? 'Deal' : 'Lead'
-  let params = { leadId: props.task.reference_docname }
-  if (name == 'Deal') {
-    params = { dealId: props.task.reference_docname }
+  if (!linkedReference.value) return
+  router.push({
+    name: linkedReference.value.routeName,
+    params: {
+      [linkedReference.value.paramKey]: linkedReference.value.docname,
+    },
+  })
+}
+
+function getReferenceRoute(doctype, docname) {
+  if (!doctype || !docname) return null
+
+  switch (doctype) {
+    case 'CRM Lead':
+      return {
+        label: __('Open Lead'),
+        routeName: 'Lead',
+        paramKey: 'leadId',
+        docname,
+      }
+    case 'CRM Deal':
+      return {
+        label: __('Open Deal'),
+        routeName: 'Deal',
+        paramKey: 'dealId',
+        docname,
+      }
+    case 'Contact':
+      return {
+        label: __('Open Contact'),
+        routeName: 'Contact',
+        paramKey: 'contactId',
+        docname,
+      }
+    case 'CRM Organization':
+      return {
+        label: __('Open Organization'),
+        routeName: 'Organization',
+        paramKey: 'organizationId',
+        docname,
+      }
+    default:
+      return null
   }
-  router.push({ name: name, params: params })
 }
 
 async function updateTask() {
