@@ -21,16 +21,8 @@
     v-model="tabIndex"
     as="div"
     :tabs="tabs"
-    class="flex h-full flex-1 flex-col overflow-hidden [&_[role='tablist']]:gap-7.5 [&_[role='tablist']]:border-b [&_[role='tablist']]:px-5 [&_[role='tabpanel']:not([hidden])]:flex [&_[role='tabpanel']:not([hidden])]:min-h-0 [&_[role='tabpanel']:not([hidden])]:grow"
+    class="flex h-full flex-1 flex-col overflow-hidden [&_[role='tab']]:px-0 [&_[role='tablist']]:gap-7.5 [&_[role='tablist']]:border-b [&_[role='tablist']]:px-5 [&_[role='tabpanel']:not([hidden])]:flex [&_[role='tabpanel']:not([hidden])]:min-h-0 [&_[role='tabpanel']:not([hidden])]:grow"
   >
-    <template #tab-item="{ tab, selected }">
-      <button
-        class="group flex items-center gap-2 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:text-ink-gray-9"
-        :class="{ 'border-outline-gray-4 text-ink-gray-9': selected }"
-      >
-        {{ __(tab.label) }}
-      </button>
-    </template>
     <template #tab-panel>
       <template v-if="tabs[tabIndex]?.name === 'Partner Reports'">
         <ViewControls

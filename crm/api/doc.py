@@ -592,6 +592,9 @@ def get_query_filters(doctype, filters):
 	if doctype != "CRM Partner Report" or "country" not in filters:
 		return filters
 
+	if frappe.db.has_column("CRM Partner Report", "country"):
+		return filters
+
 	query_filters = convert_filter_to_tuple(
 		doctype,
 		{key: value for key, value in filters.items() if key != "country"},

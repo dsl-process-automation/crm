@@ -81,6 +81,18 @@ class TestCRMPartnerReport(IntegrationTestCase):
 
 		self.assertFalse(doc.get("region"))
 
+	def test_validate_sets_country_from_partner_name_suffix(self):
+		partner = frappe.get_doc(
+			{
+				"doctype": "CRM Organization",
+				"organization_name": f"Partner Report Test Org {frappe.generate_hash(length=4)} - Uganda",
+			}
+		).insert()
+
+		report = create_test_partner_report(partner=partner.name, country=None)
+
+		self.assertEqual(report.country, "Uganda")
+
 	def test_default_list_data_structure(self):
 		data = CRMPartnerReport.default_list_data()
 

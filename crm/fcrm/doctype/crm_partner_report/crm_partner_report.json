@@ -8,7 +8,8 @@
   "partner",
   "reporting_month",
   "submitted_by",
-    "region",
+  "region",
+  "country",
   "section_partner",
   "achievements",
   "partner_satisfaction",
@@ -56,6 +57,12 @@
      "options": "CRM Territory",
      "read_only": 1
     },
+  {
+   "fieldname": "country",
+   "fieldtype": "Link",
+   "label": "Country",
+   "options": "Country"
+  },
   {
    "fieldname": "section_partner",
    "fieldtype": "Section Break",

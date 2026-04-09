@@ -6,6 +6,8 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate, nowdate
 
+from crm.fcrm.doctype.crm_partner_report.crm_partner_report import get_partner_country
+
 
 PARTNER_REPORT_REGION_FIELD = "region"
 USER_REGION_FIELD = "region"
@@ -78,6 +80,7 @@ def get_partner_report_analytics(
 	month_count: int = 12,
 	year: int | None = None,
 	month: int | None = None,
+	all_time: int = 0,
 	countries: list[str] | str | None = None,
 	regions: list[str] | str | None = None,
 	partners: list[str] | str | None = None,
@@ -90,9 +93,20 @@ def get_partner_report_analytics(
 	if not metrics:
 		frappe.throw(_("Invalid metric group"))
 
-	month_count = max(cint(month_count), 1)
-	month_starts = _get_month_starts(month_count, year=year, month=month)
+	if cint(all_time):
+		month_starts = _get_all_time_month_starts(
+			countries=countries,
+			regions=regions,
+			partners=partners,
+		)
+	else:
+		month_count = max(cint(month_count), 1)
+		month_starts = _get_month_starts(month_count, year=year, month=month)
+
 	month_labels = [_format_month_label(month_start.year, month_start.month) for month_start in month_starts]
+	if not month_starts:
+		return _build_analytics_response([], [], metrics, {}, 0)
+
 	month_buckets, report_count = _get_month_buckets_for_filters(
 		metrics=metrics,
 		month_starts=month_starts,
@@ -162,11 +176,22 @@ def get_partner_report_regions() -> list[dict]:
 
 @frappe.whitelist()
 def get_partner_report_countries(regions: list[str] | str | None = None) -> list[dict]:
-	"""Return organization address countries, optionally narrowed by region."""
+	"""Return report countries, optionally narrowed by region."""
 	if not frappe.has_permission("CRM Partner Report", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	return _get_string_options(_get_country_names_for_filters(regions=regions))
+
+
+@frappe.whitelist()
+def get_partner_report_country_options() -> list[dict]:
+	"""Return the standard Frappe country list for Partner Report entry."""
+	if not frappe.has_permission("CRM Partner Report", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	return _get_string_options(
+		frappe.get_all("Country", pluck="name", order_by="name asc", page_length=0)
+	)
 
 
 @frappe.whitelist()
@@ -182,13 +207,16 @@ def get_partner_report_partners(
 	if not partner_names:
 		return []
 
-	return frappe.get_list(
+	partners = frappe.get_list(
 		"CRM Organization",
 		filters=[["name", "in", partner_names]],
 		fields=["name", "organization_name", "territory", "contract_status"],
 		order_by="organization_name asc",
 		page_length=500,
 	)
+	for partner in partners:
+		partner["country"] = get_partner_country(partner.get("name"))
+	return partners
 
 
 @frappe.whitelist()
@@ -241,7 +269,7 @@ def update_partner_report(name: str, data: dict | str):
 
 def _normalize_partner_report_payload(data: dict) -> dict:
 	normalized = dict(data or {})
-	for fieldname in ("partner", "submitted_by", PARTNER_REPORT_REGION_FIELD):
+	for fieldname in ("partner", "submitted_by", PARTNER_REPORT_REGION_FIELD, "country"):
 		if fieldname in normalized:
 			normalized[fieldname] = _coerce_link_value(normalized.get(fieldname))
 	return normalized
@@ -281,6 +309,8 @@ def get_partners_for_user() -> list[dict]:
 		order_by="organization_name asc",
 		page_length=500,
 	)
+	for organization in orgs:
+		organization["country"] = get_partner_country(organization.get("name"))
 
 	return orgs
 
@@ -342,20 +372,42 @@ def _build_report_filters(
 ) -> dict | None:
 	start_date = month_starts[0]
 	end_date = _get_month_end(month_starts[-1])
-	filters: dict[str, object] = {
-		"reporting_month": ["between", [start_date.isoformat(), end_date.isoformat()]],
-	}
+	filters = _build_partner_scope_filters(
+		regions=regions,
+		partners=partners,
+	)
+	if filters is None:
+		return None
 
-	selected_regions = _coerce_string_list(regions)
+	filters.update({
+		"reporting_month": ["between", [start_date.isoformat(), end_date.isoformat()]],
+	})
+
 	selected_countries = _coerce_string_list(countries)
+	if selected_countries:
+		filters["country"] = ["in", selected_countries]
+
+	return filters
+
+
+def _build_partner_scope_filters(
+	regions: list[str] | str | None = None,
+	partners: list[str] | str | None = None,
+) -> dict | None:
+	filters: dict[str, object] = {}
+	selected_regions = _coerce_string_list(regions)
 	selected_partners = _coerce_string_list(partners)
 
-	if selected_regions or selected_countries or selected_partners:
+	if selected_regions:
+		region_scope = _get_descendant_territory_names(selected_regions, include_self=True)
+		if not region_scope:
+			return None
+		filters[PARTNER_REPORT_REGION_FIELD] = ["in", region_scope]
+
+	if selected_partners:
 		partner_names = _get_partner_names_for_filters(
 			regions=selected_regions,
-			countries=selected_countries,
 			partners=selected_partners,
-			include_missing_country=bool(selected_partners),
 		)
 		if not partner_names:
 			return None
@@ -368,11 +420,38 @@ def _get_partner_names_for_filters(
 	regions: list[str] | str | None = None,
 	countries: list[str] | str | None = None,
 	partners: list[str] | str | None = None,
-	include_missing_country: bool = False,
 ) -> list[str]:
 	selected_regions = _coerce_string_list(regions)
 	selected_countries = _coerce_string_list(countries)
 	selected_partners = _coerce_string_list(partners)
+
+	report_filters: dict[str, object] = {}
+	if selected_regions:
+		region_scope = _get_descendant_territory_names(selected_regions, include_self=True)
+		if not region_scope:
+			return []
+		report_filters[PARTNER_REPORT_REGION_FIELD] = ["in", region_scope]
+
+	if selected_countries:
+		report_filters["country"] = ["in", selected_countries]
+
+	if selected_partners:
+		report_filters["partner"] = ["in", selected_partners]
+
+	partner_names = frappe.get_all(
+		"CRM Partner Report",
+		filters=report_filters,
+		pluck="partner",
+		distinct=True,
+		order_by="partner asc",
+		page_length=0,
+	)
+	partner_names = [name for name in partner_names if name]
+	if partner_names:
+		return partner_names
+
+	if selected_partners:
+		return [name for name in selected_partners if frappe.db.exists("CRM Organization", name)]
 
 	organization_filters = []
 	if selected_regions:
@@ -380,9 +459,6 @@ def _get_partner_names_for_filters(
 		if not region_scope:
 			return []
 		organization_filters.append(["territory", "in", region_scope])
-
-	if selected_partners:
-		organization_filters.append(["name", "in", selected_partners])
 
 	partner_names = frappe.get_all(
 		"CRM Organization",
@@ -395,12 +471,10 @@ def _get_partner_names_for_filters(
 
 	if selected_countries:
 		allowed_countries = set(selected_countries)
-		address_country_map = _get_address_country_map(partner_names)
 		partner_names = [
 			name
 			for name in partner_names
-			if address_country_map.get(name) in allowed_countries
-			or (include_missing_country and not address_country_map.get(name))
+			if get_partner_country(name) in allowed_countries
 		]
 
 	return partner_names
@@ -416,65 +490,21 @@ def _get_region_territory_names() -> list[str]:
 
 def _get_country_names_for_filters(regions: list[str] | str | None = None) -> list[str]:
 	selected_regions = _coerce_string_list(regions)
-	organization_filters = [["address", "is", "set"]]
+	report_filters: dict[str, object] = {"country": ["is", "set"]}
 	if selected_regions:
 		region_scope = _get_descendant_territory_names(selected_regions, include_self=True)
 		if not region_scope:
 			return []
-		organization_filters.append(["territory", "in", region_scope])
+		report_filters[PARTNER_REPORT_REGION_FIELD] = ["in", region_scope]
 
-	organization_names = frappe.get_all(
-		"CRM Organization",
-		filters=organization_filters,
-		pluck="name",
+	return frappe.get_all(
+		"CRM Partner Report",
+		filters=report_filters,
+		pluck="country",
 		distinct=True,
-		order_by="name asc",
+		order_by="country asc",
 		page_length=0,
 	)
-	if not organization_names:
-		return []
-
-	address_country_map = _get_address_country_map(organization_names)
-	return sorted({country for country in address_country_map.values() if country})
-
-
-def _get_address_country_map(organization_names: list[str] | None = None) -> dict[str, str]:
-	organization_filters = [["address", "is", "set"]]
-	if organization_names:
-		organization_filters.append(["name", "in", organization_names])
-
-	organizations = frappe.get_all(
-		"CRM Organization",
-		filters=organization_filters,
-		fields=["name", "address"],
-		page_length=0,
-	)
-	if not organizations:
-		return {}
-
-	address_names = sorted(
-		{organization.get("address") for organization in organizations if organization.get("address")}
-	)
-	if not address_names:
-		return {}
-
-	addresses = frappe.get_all(
-		"Address",
-		filters=[["name", "in", address_names]],
-		fields=["name", "country"],
-		page_length=0,
-	)
-	address_map = {
-		address["name"]: address.get("country")
-		for address in addresses
-		if address.get("name")
-	}
-
-	return {
-		organization["name"]: address_map.get(organization.get("address"), "")
-		for organization in organizations
-		if organization.get("name")
-	}
 
 
 def _get_descendant_territory_names(
@@ -594,6 +624,57 @@ def _get_month_starts(month_count: int, year: int | None = None, month: int | No
 		current_year -= 1
 
 	for _ in range(month_count):
+		month_starts.append(date(current_year, current_month, 1))
+		current_month += 1
+		if current_month > 12:
+			current_month = 1
+			current_year += 1
+
+	return month_starts
+
+
+def _get_all_time_month_starts(
+	countries: list[str] | str | None = None,
+	regions: list[str] | str | None = None,
+	partners: list[str] | str | None = None,
+) -> list[date]:
+	filters = _build_partner_scope_filters(
+		regions=regions,
+		partners=partners,
+	)
+	if filters is None:
+		return []
+
+	selected_countries = _coerce_string_list(countries)
+	if selected_countries:
+		filters["country"] = ["in", selected_countries]
+
+	first_report = frappe.get_all(
+		"CRM Partner Report",
+		fields=["reporting_month"],
+		filters=filters,
+		order_by="reporting_month asc",
+		page_length=1,
+	)
+	last_report = frappe.get_all(
+		"CRM Partner Report",
+		fields=["reporting_month"],
+		filters=filters,
+		order_by="reporting_month desc",
+		page_length=1,
+	)
+	if not first_report or not last_report:
+		return []
+
+	start_date = getdate(first_report[0].get("reporting_month"))
+	end_date = getdate(last_report[0].get("reporting_month"))
+	if not start_date or not end_date:
+		return []
+
+	month_starts = []
+	current_year = start_date.year
+	current_month = start_date.month
+	while (current_year, current_month) <= (end_date.year, end_date.month):
 		month_starts.append(date(current_year, current_month, 1))
 		current_month += 1
 		if current_month > 12:

@@ -55,7 +55,7 @@
 
         <!-- ── STEP 1: Partner ── -->
         <div v-if="currentStep === 0" class="mx-auto w-full max-w-5xl space-y-6">
-          <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div>
               <label class="mb-1 block text-sm font-medium text-ink-gray-7">
                 {{ __('Reporting Month') }} <span class="text-red-500">*</span>
@@ -89,6 +89,26 @@
               </div>
               <p v-if="errors.partner" class="mt-1 text-xs text-red-500">
                 {{ errors.partner }}
+              </p>
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-medium text-ink-gray-7">
+                {{ __('Country') }} <span class="text-red-500">*</span>
+              </label>
+              <div
+                class="rounded-md"
+                :class="errors.country ? 'ring-1 ring-red-400' : ''"
+              >
+                <Autocomplete
+                  v-model="countryModel"
+                  :options="countryOptions"
+                  :placeholder="__('Select country…')"
+                  variant="outline"
+                  size="lg"
+                />
+              </div>
+              <p v-if="errors.country" class="mt-1 text-xs text-red-500">
+                {{ errors.country }}
               </p>
             </div>
           </div>
@@ -542,6 +562,7 @@ const updateReportResource = createResource({
 const defaultForm = {
   reporting_month: '',
   partner: '',
+  country: '',
   achievements: '',
   partner_satisfaction: '',
   partner_satisfaction_details: '',
@@ -586,7 +607,12 @@ const partnersResource = createResource({
   auto: true,
 })
 
-function normalizePartnerValue(value) {
+const countriesResource = createResource({
+  url: 'crm.api.partner_report.get_partner_report_country_options',
+  auto: true,
+})
+
+function normalizeAutocompleteValue(value) {
   if (!value) return ''
   if (typeof value === 'string') return value
   if (typeof value === 'object') {
@@ -596,9 +622,16 @@ function normalizePartnerValue(value) {
 }
 
 const partnerModel = computed({
-  get: () => normalizePartnerValue(form.value.partner),
+  get: () => normalizeAutocompleteValue(form.value.partner),
   set: (value) => {
-    form.value.partner = normalizePartnerValue(value)
+    form.value.partner = normalizeAutocompleteValue(value)
+  },
+})
+
+const countryModel = computed({
+  get: () => normalizeAutocompleteValue(form.value.country),
+  set: (value) => {
+    form.value.country = normalizeAutocompleteValue(value)
   },
 })
 
@@ -608,7 +641,7 @@ function formatPartnerLabel(partner) {
 
 const partners = computed(() => {
   const items = partnersResource.data || []
-  const selectedPartner = normalizePartnerValue(form.value.partner) || props.initialPartner
+  const selectedPartner = normalizeAutocompleteValue(form.value.partner) || props.initialPartner
   const selectedPartnerLabel =
     selectedPartner === props.initialPartner
       ? props.initialPartnerLabel || selectedPartner
@@ -623,6 +656,7 @@ const partners = computed(() => {
         name: selectedPartner,
         organization_name: selectedPartnerLabel,
         territory: '',
+        country: '',
       },
       ...items,
     ]
@@ -638,17 +672,29 @@ const partnerOptions = computed(() =>
   })),
 )
 
+const countryOptions = computed(() => countriesResource.data || [])
+
 const partnerName = computed(() => {
-  const partnerValue = normalizePartnerValue(form.value.partner)
+  const partnerValue = normalizeAutocompleteValue(form.value.partner)
   const found = partners.value.find((p) => p.name === partnerValue)
   return found ? formatPartnerLabel(found) : partnerValue
 })
 
 const partnerTerritory = computed(() => {
-  const partnerValue = normalizePartnerValue(form.value.partner)
+  const partnerValue = normalizeAutocompleteValue(form.value.partner)
   const found = partners.value.find((p) => p.name === partnerValue)
   return found?.territory || ''
 })
+
+watch(
+  () => normalizeAutocompleteValue(form.value.partner),
+  (partnerValue) => {
+    const selectedPartner = partners.value.find((partner) => partner.name === partnerValue)
+    if (selectedPartner?.country) {
+      form.value.country = selectedPartner.country
+    }
+  },
+)
 
 const richTextFields = new Set([
   'achievements',
@@ -705,7 +751,8 @@ function normalizeReportData(report = {}) {
   return {
     ...defaultForm,
     ...report,
-    partner: normalizePartnerValue(report.partner),
+    partner: normalizeAutocompleteValue(report.partner),
+    country: normalizeAutocompleteValue(report.country),
     reporting_month: report.reporting_month?.slice?.(0, 7) || '',
   }
 }
@@ -776,6 +823,7 @@ const stepValidations = {
   0: [
     'reporting_month',
     'partner',
+    'country',
     'achievements',
     'partner_satisfaction',
     'partner_satisfaction_details',
@@ -874,7 +922,8 @@ async function submit() {
   // Convert reporting_month from YYYY-MM to YYYY-MM-01 for Frappe Date field
   const payload = {
     ...form.value,
-    partner: normalizePartnerValue(form.value.partner),
+    partner: normalizeAutocompleteValue(form.value.partner),
+    country: normalizeAutocompleteValue(form.value.country),
     reporting_month: form.value.reporting_month
       ? form.value.reporting_month + '-01'
       : form.value.reporting_month,

@@ -4,6 +4,7 @@ import click
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
+from crm.fcrm.doctype.crm_partner_report.crm_partner_report import get_partner_country
 from crm.fcrm.doctype.crm_dashboard.crm_dashboard import create_default_manager_dashboard
 from crm.fcrm.doctype.crm_products.crm_products import create_product_details_script
 
@@ -29,6 +30,7 @@ def after_install(force=False):
 	create_assignment_rule_custom_fields()
 	add_assignment_rule_property_setters()
 	backfill_partner_report_regions()
+	backfill_partner_report_countries()
 	frappe.db.commit()
 
 
@@ -343,6 +345,23 @@ def backfill_partner_report_regions():
 		region = user_regions.get(report.submitted_by)
 		if region:
 			frappe.db.set_value("CRM Partner Report", report.name, "region", region, update_modified=False)
+
+
+def backfill_partner_report_countries():
+	if not frappe.db.has_column("CRM Partner Report", "country"):
+		return
+
+	for report in frappe.get_all(
+		"CRM Partner Report",
+		fields=["name", "partner", "country"],
+		page_length=0,
+	):
+		if report.country:
+			continue
+
+		country = get_partner_country(report.partner)
+		if country:
+			frappe.db.set_value("CRM Partner Report", report.name, "country", country, update_modified=False)
 
 
 def _resolve_region_link_value(value: str | None) -> str | None:

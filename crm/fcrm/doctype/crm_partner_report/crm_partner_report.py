@@ -19,6 +19,7 @@ RICH_TEXT_FIELDS = (
 class CRMPartnerReport(Document):
 	def validate(self):
 		self._sanitize_rich_text_fields()
+		self._set_country()
 
 	def before_insert(self):
 		self.submitted_by = self.submitted_by or frappe.session.user
@@ -97,6 +98,17 @@ class CRMPartnerReport(Document):
 
 			self.set(fieldname, sanitize_html(value, always_sanitize=True))
 
+	def _set_country(self):
+		if not self.meta.has_field("country"):
+			return
+
+		country = _resolve_country_link_value(self.get("country"))
+		if not country:
+			country = get_partner_country(self.get("partner"))
+
+		if country:
+			self.set("country", country)
+
 
 def _resolve_region_link_value(value: str | None) -> str | None:
 	if not value:
@@ -110,3 +122,68 @@ def _resolve_region_link_value(value: str | None) -> str | None:
 		return region
 
 	return frappe.db.get_value("CRM Territory", {"territory_name": region}, "name")
+
+
+def get_partner_country(value: str | None) -> str | None:
+	partner = _resolve_link_value(value)
+	if not partner:
+		return None
+
+	organization = frappe.db.get_value(
+		"CRM Organization",
+		partner,
+		["organization_name", "address"],
+		as_dict=True,
+	)
+	if not organization:
+		return _extract_country_from_label(partner)
+
+	address = organization.get("address")
+	if address:
+		country = _resolve_country_link_value(frappe.db.get_value("Address", address, "country"))
+		if country:
+			return country
+
+	return _extract_country_from_label(organization.get("organization_name") or partner)
+
+
+def _resolve_country_link_value(value: str | None) -> str | None:
+	if not value:
+		return None
+
+	country = str(value).strip()
+	if not country:
+		return None
+
+	if frappe.db.exists("Country", country):
+		return country
+
+	return None
+
+
+def _resolve_link_value(value):
+	if isinstance(value, dict):
+		return value.get("value") or value.get("name") or value.get("label") or None
+	return value
+
+
+def _extract_country_from_label(label: str | None) -> str | None:
+	if not label:
+		return None
+
+	normalized_label = str(label).strip()
+	if not normalized_label:
+		return None
+
+	candidates = []
+	if " - " in normalized_label:
+		candidates.append(normalized_label.rsplit(" - ", 1)[-1].strip())
+	if normalized_label.endswith(")") and "(" in normalized_label:
+		candidates.append(normalized_label.rsplit("(", 1)[-1].rstrip(")").strip())
+
+	for candidate in candidates:
+		country = _resolve_country_link_value(candidate)
+		if country:
+			return country
+
+	return None

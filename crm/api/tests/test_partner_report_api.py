@@ -10,6 +10,8 @@ from frappe.tests import IntegrationTestCase
 from crm.api.doc import get_data, get_filterable_fields
 from crm.api.partner_report import (
 	create_partner_report,
+	get_partner_report_analytics,
+	get_partner_report_countries,
 	get_partner_report,
 	get_partner_report_permissions,
 	get_partner_reports,
@@ -100,14 +102,8 @@ class TestPartnerReportAPI(IntegrationTestCase):
 		self.assertEqual(result["reports"][0]["partner"], partner_one.name)
 
 	def test_get_data_filters_partner_reports_by_country(self):
-		india_address = create_test_address(country="India")
-		us_address = create_test_address(country="United States")
-
-		india_partner = create_test_organization(address=india_address.name)
-		us_partner = create_test_organization(address=us_address.name)
-
-		india_report = create_test_partner_report(partner=india_partner.name)
-		us_report = create_test_partner_report(partner=us_partner.name)
+		india_report = create_test_partner_report(country="India")
+		us_report = create_test_partner_report(country="United States")
 
 		result = get_data(
 			doctype="CRM Partner Report",
@@ -120,10 +116,60 @@ class TestPartnerReportAPI(IntegrationTestCase):
 		self.assertIn(india_report.name, report_names)
 		self.assertNotIn(us_report.name, report_names)
 
+	def test_get_partner_report_countries_reads_report_country_values(self):
+		create_test_partner_report(country="Ghana")
+		create_test_partner_report(country="Uganda")
+
+		result = get_partner_report_countries()
+
+		self.assertEqual([item["value"] for item in result], ["Ghana", "Uganda"])
+
 	def test_get_filterable_fields_includes_partner_report_country(self):
 		fieldnames = {field["fieldname"] for field in get_filterable_fields("CRM Partner Report")}
 
 		self.assertIn("country", fieldnames)
+
+	def test_get_partner_report_analytics_all_time_uses_full_report_history(self):
+		create_test_partner_report(
+			reporting_month="2024-01-01",
+			num_of_groups_on_insights=12,
+			num_of_registered_groups=8,
+		)
+		create_test_partner_report(
+			reporting_month="2024-03-01",
+			num_of_groups_on_insights=9,
+			num_of_registered_groups=6,
+		)
+
+		result = get_partner_report_analytics(metric_group="group", all_time=1)
+
+		self.assertEqual(result["months"], ["JAN 2024", "FEB 2024", "MAR 2024"])
+		self.assertEqual(result["report_count"], 2)
+		self.assertEqual(result["data"][0]["JAN 2024"], 12)
+		self.assertEqual(result["data"][0]["FEB 2024"], 0)
+		self.assertEqual(result["data"][0]["MAR 2024"], 9)
+
+	def test_get_partner_report_analytics_filters_by_report_country(self):
+		create_test_partner_report(
+			reporting_month="2026-03-01",
+			country="Ghana",
+			percentage_of_two_plus_not_backed_up_groups=66.7,
+		)
+		create_test_partner_report(
+			reporting_month="2026-03-01",
+			country="Uganda",
+			percentage_of_two_plus_not_backed_up_groups=40.0,
+		)
+
+		result = get_partner_report_analytics(
+			metric_group="backup",
+			all_time=1,
+			countries=["Ghana"],
+		)
+
+		self.assertEqual(result["months"], ["MAR 2026"])
+		self.assertEqual(result["report_count"], 1)
+		self.assertEqual(result["data"][0]["MAR 2026"], 66.7)
 
 	def test_get_partner_report_permissions_without_name(self):
 		with patch(

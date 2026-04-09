@@ -239,10 +239,8 @@
 				/>
 			</div>
 
-			<div
-				v-else-if="analyticsRows.length && months.length"
-				class="overflow-x-auto rounded-lg border"
-			>
+			<div v-else class="space-y-3">
+				<div class="overflow-x-auto rounded-lg border">
 				<table class="min-w-full border-collapse text-left text-sm">
 					<thead class="bg-surface-gray-2">
 						<tr>
@@ -252,7 +250,7 @@
 								{{ __('Metric') }}
 							</th>
 							<th
-								v-for="month in months"
+								v-for="month in displayMonths"
 								:key="month"
 								class="min-w-32 border-b px-4 py-3 text-sm font-semibold text-ink-gray-8"
 							>
@@ -262,7 +260,7 @@
 					</thead>
 					<tbody>
 						<tr
-							v-for="row in analyticsRows"
+							v-for="row in displayAnalyticsRows"
 							:key="row.metric"
 							class="odd:bg-surface-white even:bg-surface-gray-1"
 						>
@@ -270,7 +268,7 @@
 								{{ row.metric }}
 							</td>
 							<td
-								v-for="month in months"
+								v-for="month in displayMonths"
 								:key="`${row.metric}-${month}`"
 								class="border-b px-4 py-3 text-ink-gray-7"
 							>
@@ -281,11 +279,12 @@
 				</table>
 			</div>
 
-			<div
-				v-else
-				class="flex h-full min-h-60 items-center justify-center rounded-lg border border-dashed text-sm text-ink-gray-5"
-			>
-				{{ __('No analysis data available for the selected filters.') }}
+				<div
+					v-if="showNoDataMessage"
+					class="rounded-lg border border-dashed px-4 py-3 text-sm text-ink-gray-5"
+				>
+					{{ __('No analysis data available for the selected filters.') }}
+				</div>
 			</div>
 		</div>
 
@@ -454,6 +453,17 @@ const monthOptions = [
 const currentDate = new Date()
 const currentYear = currentDate.getFullYear()
 const currentMonth = currentDate.getMonth()
+const monthAbbreviations = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+const defaultMetricLabels = {
+	group: [
+		__('Number of Groups on Insights'),
+		__('Number of Registered Groups'),
+	],
+	backup: [
+		__('% Groups 2+ Meetings Not Backed Up'),
+		__('% Groups Never Backed Up'),
+	],
+}
 const yearOptions = Array.from({ length: 8 }, (_, index) => currentYear - 3 + index).map((value) => ({
 	label: `${value}`,
 	value,
@@ -500,6 +510,7 @@ const analytics = createResource({
 
 		return {
 			metric_group: props.metricGroup,
+			all_time: window ? 0 : 1,
 			...(window
 				? {
 						year: window.startYear,
@@ -550,6 +561,23 @@ const filteredPartners = computed(() => filterOptions(partnerOptions.value, quer
 
 const months = computed(() => analytics.data?.months || [])
 const analyticsRows = computed(() => analytics.data?.data || [])
+const analyticsReportCount = computed(() => Number(analytics.data?.report_count || 0))
+const fallbackMonths = computed(() => buildFallbackMonths())
+const displayMonths = computed(() => months.value.length ? months.value : fallbackMonths.value)
+const displayAnalyticsRows = computed(() => {
+	if (analyticsRows.value.length) {
+		return analyticsRows.value
+	}
+
+	return (defaultMetricLabels[props.metricGroup] || []).map((metric) => {
+		const row = { metric }
+		for (const month of displayMonths.value) {
+			row[month] = 0
+		}
+		return row
+	})
+})
+const showNoDataMessage = computed(() => analyticsReportCount.value === 0)
 
 const filtersLoading = computed(() => {
 	return Boolean(regionsResource.loading || countriesResource.loading || partnersResource.loading)
@@ -629,6 +657,27 @@ function createDefaultExportRange() {
 		endYear: defaultWindow.endYear,
 		endMonth: defaultWindow.endMonth,
 	}
+}
+
+function buildFallbackMonths() {
+	const window = resolveMonthWindow(monthFilter.value) || resolveMonthWindow({ mode: 'quick', quickMonths: 12 })
+	if (!window) {
+		return []
+	}
+
+	const labels = []
+	const cursor = new Date(window.startYear, window.startMonth, 1)
+
+	for (let index = 0; index < window.monthCount; index++) {
+		labels.push(formatMonthLabel(cursor.getFullYear(), cursor.getMonth()))
+		cursor.setMonth(cursor.getMonth() + 1)
+	}
+
+	return labels
+}
+
+function formatMonthLabel(year, monthIndex) {
+	return `${monthAbbreviations[monthIndex]} ${year}`
 }
 
 function resolveMonthWindow(filter) {
