@@ -348,6 +348,7 @@ const props = defineProps({
   doctype: { type: String, required: true },
   filters: { type: Object, default: () => ({}) },
   hideDefaultFilters: { type: Boolean, default: true },
+  applyDefaultFilters: { type: Boolean, default: true },
   options: {
     type: Object,
     default: () => ({
@@ -463,6 +464,7 @@ function getParams() {
   let _view = getView(route.query.view, route.params.viewType, props.doctype)
   const view_name = _view?.name || ''
   const view_type = _view?.type || route.params.viewType || 'list'
+  const defaultFilters = props.applyDefaultFilters ? props.filters || {} : {}
   const filters = {
     ...((_view?.filters && JSON.parse(_view.filters)) || {}),
     ...(props.filters || {}),
@@ -500,7 +502,7 @@ function getParams() {
     doctype: props.doctype,
     filters: filters,
     order_by: order_by,
-    default_filters: props.filters,
+    default_filters: defaultFilters,
     view: {
       custom_view_name: view_name,
       view_type: view_type,
@@ -528,7 +530,7 @@ list.value = createResource({
       doctype: props.doctype,
       filters: params.filters,
       order_by: params.order_by,
-      default_filters: props.filters,
+      default_filters: defaultFilters,
       view: {
         custom_view_name: cv?.name || '',
         view_type: cv?.type || route.params.viewType || 'list',

@@ -35,6 +35,7 @@
           doctype="CRM Partner Report"
           :filters="listDefaultFilters"
           :hideDefaultFilters="false"
+          :applyDefaultFilters="false"
           :options="{
             defaultViewName: __('Partner Reports View'),
             allowedViews: ['list', 'group_by'],
