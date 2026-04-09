@@ -180,6 +180,7 @@ const typeDate = ['Date', 'Datetime']
 const props = defineProps({
   doctype: { type: String, required: true },
   default_filters: { type: Object, default: () => {} },
+  hideDefaultFilters: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['update'])
@@ -203,7 +204,7 @@ const filters = computed(() => {
     list.value?.params?.filters || list.value.data?.params?.filters
   if (!allFilters || !filterableFields.data) return new Set()
   // remove default filters
-  if (props.default_filters) {
+  if (props.hideDefaultFilters && props.default_filters) {
     allFilters = removeCommonFilters(props.default_filters, allFilters)
   }
   return convertFilters(filterableFields.data, allFilters)

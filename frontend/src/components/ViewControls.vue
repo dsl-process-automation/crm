@@ -10,6 +10,7 @@
             v-model="list"
             :doctype="doctype"
             :default_filters="filters"
+            :hideDefaultFilters="hideDefaultFilters"
             @update="updateFilter"
           />
           <GroupBy
@@ -171,6 +172,7 @@
           v-model="list"
           :doctype="doctype"
           :default_filters="filters"
+          :hideDefaultFilters="hideDefaultFilters"
           @update="updateFilter"
         />
         <SortBy
@@ -345,6 +347,7 @@ import ImportIcon from '~icons/lucide/import'
 const props = defineProps({
   doctype: { type: String, required: true },
   filters: { type: Object, default: () => ({}) },
+  hideDefaultFilters: { type: Boolean, default: true },
   options: {
     type: Object,
     default: () => ({
