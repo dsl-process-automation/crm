@@ -7,7 +7,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from crm.api.doc import get_data, get_filterable_fields
+from crm.api.doc import get_data, get_filterable_fields, get_query_filters
 from crm.api.partner_report import (
 	create_partner_report,
 	get_partner_report_analytics,
@@ -115,6 +115,24 @@ class TestPartnerReportAPI(IntegrationTestCase):
 		report_names = {row["name"] for row in result["data"]}
 		self.assertIn(india_report.name, report_names)
 		self.assertNotIn(us_report.name, report_names)
+
+	def test_get_data_without_region_filter_returns_partner_reports(self):
+		region = create_test_territory()
+		report = create_test_partner_report(region=region.name)
+
+		result = get_data(
+			doctype="CRM Partner Report",
+			filters={},
+			order_by="reporting_month desc, creation desc",
+			page_length=5000,
+			view={"view_type": "list"},
+		)
+
+		report_names = {row["name"] for row in result["data"]}
+		self.assertIn(report.name, report_names)
+
+	def test_get_query_filters_without_region_leaves_partner_reports_unscoped(self):
+		self.assertEqual(get_query_filters("CRM Partner Report", {}), {})
 
 	def test_get_partner_report_countries_reads_report_country_values(self):
 		create_test_partner_report(country="Ghana")

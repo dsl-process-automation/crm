@@ -373,6 +373,12 @@ const route = useRoute()
 const router = useRouter()
 
 const defaultParams = ref('')
+const filtersCacheKey = computed(() =>
+  JSON.stringify({
+    filters: props.filters || {},
+    applyDefaultFilters: props.applyDefaultFilters,
+  }),
+)
 
 const viewUpdated = ref(false)
 const showViewModal = ref(false)
@@ -522,7 +528,7 @@ function getParams() {
 list.value = createResource({
   url: 'crm.api.doc.get_data',
   params: getParams(),
-  cache: [props.doctype, route.query.view, route.params.viewType],
+  cache: [props.doctype, route.query.view, route.params.viewType, filtersCacheKey.value],
   onSuccess(data) {
     let cv = getView(route.query.view, route.params.viewType, props.doctype)
     let params = list.value.params ? list.value.params : getParams()
@@ -530,7 +536,7 @@ list.value = createResource({
       doctype: props.doctype,
       filters: params.filters,
       order_by: params.order_by,
-      default_filters: defaultFilters,
+      default_filters: params.default_filters,
       view: {
         custom_view_name: cv?.name || '',
         view_type: cv?.type || route.params.viewType || 'list',
@@ -1325,6 +1331,27 @@ defineExpose({
 })
 
 // Watchers
+watch(
+  [() => props.filters, () => props.applyDefaultFilters],
+  ([filters, applyDefaultFilters], [oldFilters, oldApplyDefaultFilters]) => {
+    if (
+      _.isEqual(filters, oldFilters) &&
+      applyDefaultFilters === oldApplyDefaultFilters
+    ) {
+      return
+    }
+
+    let params = getParams()
+    if (_.isEqual(list.value?.params, params)) {
+      return
+    }
+
+    list.value.params = params
+    list.value.reload()
+  },
+  { deep: true },
+)
+
 watch(
   () => getView(route.query.view, route.params.viewType, props.doctype),
   (value, old_value) => {

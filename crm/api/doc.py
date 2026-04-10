@@ -615,7 +615,7 @@ def get_query_filters(doctype, filters):
 
 def get_partner_report_region_scope(region_filter):
 	selected_regions = extract_partner_report_filter_values(region_filter)
-	if selected_regions is None:
+	if not selected_regions:
 		return None
 
 	return _get_descendant_territory_names(selected_regions, include_self=True)
